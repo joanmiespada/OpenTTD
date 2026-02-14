@@ -17,6 +17,7 @@
 #include "timer/timer_game_economy.h"
 #include "settings_type.h"
 #include "group.h"
+#include "stock_type.h"
 
 static const Money COMPANY_MAX_LOAN_DEFAULT = INT64_MIN;
 
@@ -122,6 +123,8 @@ struct CompanyProperties {
 
 	EngineRenewList engine_renew_list = nullptr; ///< Engine renewals of this company.
 	CompanySettings settings{}; ///< settings specific for each company
+
+	CompanyStockInfo stock_info{}; ///< Stock marketplace data for this company.
 };
 
 struct Company : CompanyProperties, CompanyPool::PoolItem<&_company_pool> {

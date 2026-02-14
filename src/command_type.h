@@ -380,6 +380,12 @@ enum class Commands : uint8_t {
 	UpdateLeagueTableElementScore, ///< update the score of a league table element
 	RemoveLeagueTableElement, ///< remove a league table element
 
+	ListCompanyStock, ///< issue shares on the market
+	BuyStock, ///< buy shares from another company
+	SellStock, ///< sell shares back to the market
+	SetStockPremium, ///< company adjusts premium on share price
+	BuybackStock, ///< company buys back its own shares
+
 	End, ///< @important Must ALWAYS be on the end of this list!! (period)
 };
 

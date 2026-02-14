@@ -186,6 +186,8 @@ enum ExpensesType : uint8_t {
 	EXPENSES_SHIP_REVENUE,        ///< Revenue from ships.
 	EXPENSES_LOAN_INTEREST,       ///< Interest payments over the loan.
 	EXPENSES_OTHER,               ///< Other expenses.
+	EXPENSES_STOCK_REVENUE,       ///< Revenue from stock issuance and sales.
+	EXPENSES_DIVIDENDS,           ///< Dividend payments to shareholders.
 	EXPENSES_END,                 ///< Number of expense types.
 	INVALID_EXPENSES      = 0xFF, ///< Invalid expense type.
 };

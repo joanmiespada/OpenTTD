@@ -14,6 +14,7 @@
 
 #include "../company_func.h"
 #include "../company_manager_face.h"
+#include "../stock_type.h"
 #include "../fios.h"
 #include "../tunnelbridge_map.h"
 #include "../tunnelbridge.h"
@@ -471,6 +472,66 @@ public:
 	void LoadCheck(CompanyProperties *c) const override { this->Load(c); }
 };
 
+class SlCompanyStockHolders : public DefaultSaveLoadHandler<SlCompanyStockHolders, CompanyProperties> {
+public:
+	static inline const SaveLoad description[] = {
+		SLE_VAR(StockHolding, owner,          SLE_UINT8),
+		SLE_VAR(StockHolding, units,          SLE_UINT16),
+		SLE_VAR(StockHolding, purchase_price, SLE_INT64),
+	};
+	static inline const SaveLoadCompatTable compat_description = {};
+
+	void Save(CompanyProperties *c) const override
+	{
+		SlSetStructListLength(c->stock_info.holders.size());
+		for (auto &h : c->stock_info.holders) {
+			SlObject(&h, this->GetDescription());
+		}
+	}
+
+	void Load(CompanyProperties *c) const override
+	{
+		size_t num_holders = SlGetStructListLength(UINT16_MAX);
+		c->stock_info.holders.resize(num_holders);
+		for (size_t i = 0; i < num_holders; i++) {
+			SlObject(&c->stock_info.holders[i], this->GetLoadDescription());
+		}
+	}
+
+	void LoadCheck(CompanyProperties *c) const override { this->Load(c); }
+};
+
+class SlCompanyStock : public DefaultSaveLoadHandler<SlCompanyStock, CompanyProperties> {
+public:
+	static inline const SaveLoad description[] = {
+		SLE_VAR(CompanyStockInfo, listed,                 SLE_BOOL),
+		SLE_VAR(CompanyStockInfo, total_issued,           SLE_UINT16),
+		SLE_VAR(CompanyStockInfo, available_units,        SLE_UINT16),
+		SLE_VAR(CompanyStockInfo, share_price,            SLE_INT64),
+		SLE_VAR(CompanyStockInfo, price_premium,          SLE_INT64),
+		SLE_VAR(CompanyStockInfo, last_dividend_per_unit, SLE_INT64),
+		SLE_VAR(CompanyStockInfo, total_dividends_paid,   SLE_INT64),
+	};
+	static inline const SaveLoadCompatTable compat_description = {};
+
+	void Save(CompanyProperties *c) const override
+	{
+		SlObject(&c->stock_info, this->GetDescription());
+	}
+
+	void Load(CompanyProperties *c) const override
+	{
+		SlObject(&c->stock_info, this->GetLoadDescription());
+	}
+
+	void FixPointers(CompanyProperties *c) const override
+	{
+		SlObject(&c->stock_info, this->GetDescription());
+	}
+
+	void LoadCheck(CompanyProperties *c) const override { this->Load(c); }
+};
+
 class SlAllowListData : public VectorSaveLoadHandler<SlAllowListData, CompanyProperties, std::string> {
 public:
 	struct KeyWrapper {
@@ -546,6 +607,8 @@ static const SaveLoad _company_desc[] = {
 	SLEG_STRUCT("cur_economy", SlCompanyEconomy),
 	SLEG_STRUCTLIST("old_economy", SlCompanyOldEconomy),
 	SLEG_CONDSTRUCTLIST("liveries", SlCompanyLiveries,                               SLV_34, SL_MAX_VERSION),
+	SLEG_CONDSTRUCT("stock_info", SlCompanyStock,                                    SLV_STOCK_MARKET, SL_MAX_VERSION),
+	SLEG_CONDSTRUCTLIST("stock_holders", SlCompanyStockHolders,                       SLV_STOCK_MARKET, SL_MAX_VERSION),
 };
 
 struct PLYRChunkHandler : ChunkHandler {

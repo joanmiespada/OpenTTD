@@ -592,6 +592,9 @@ struct EconomySettings {
 	uint16_t town_cargo_scale;               ///< scale cargo production of towns by this percentage.
 	uint16_t industry_cargo_scale;           ///< scale cargo production of industries by this percentage.
 	uint16_t town_min_distance; ///< minimum distance between towns.
+	bool     stock_market;                   ///< enable stock marketplace.
+	uint8_t  stock_max_issue_percent;        ///< max percentage of company value issuable as stock.
+	uint8_t  stock_dividend_rate;            ///< base dividend rate (percentage of net profit).
 };
 
 struct LinkGraphSettings {

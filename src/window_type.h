@@ -732,6 +732,12 @@ enum WindowClass : uint16_t {
 	 */
 	WC_HELPWIN,
 
+	/**
+	 * Stock marketplace window; %Window numbers:
+	 *   - 0 = #StockMarketWidgets
+	 */
+	WC_STOCK_MARKET,
+
 	WC_INVALID = 0xFFFF, ///< Invalid window.
 };
 
