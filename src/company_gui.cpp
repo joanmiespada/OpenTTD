@@ -86,6 +86,12 @@ static const std::initializer_list<ExpensesType> _expenses_list_capital_costs = 
 	EXPENSES_OTHER,
 };
 
+/** List of stock market income/expenses. */
+static const std::initializer_list<ExpensesType> _expenses_list_stock = {
+	EXPENSES_STOCK_REVENUE,
+	EXPENSES_DIVIDENDS,
+};
+
 /** Expense list container. */
 struct ExpensesList {
 	const StringID title; ///< StringID of list title.
@@ -117,6 +123,7 @@ static const std::initializer_list<ExpensesList> _expenses_list_types = {
 	{ STR_FINANCES_REVENUE_TITLE,            _expenses_list_revenue },
 	{ STR_FINANCES_OPERATING_EXPENSES_TITLE, _expenses_list_operating_costs },
 	{ STR_FINANCES_CAPITAL_EXPENSES_TITLE,   _expenses_list_capital_costs },
+	{ STR_FINANCES_STOCK_TITLE,              _expenses_list_stock },
 };
 
 /**

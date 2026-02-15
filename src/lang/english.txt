@@ -674,6 +674,29 @@ STR_COMPANY_LEAGUE_PERFORMANCE_TITLE_CHAIRMAN                   :Chairperson
 STR_COMPANY_LEAGUE_PERFORMANCE_TITLE_PRESIDENT                  :President
 STR_COMPANY_LEAGUE_PERFORMANCE_TITLE_TYCOON                     :Tycoon
 
+# Stock marketplace window
+STR_STOCK_MARKET_CAPTION                                        :{WHITE}Stock Marketplace
+STR_STOCK_MARKET_HEADER_COMPANY                                 :{WHITE}Company
+STR_STOCK_MARKET_HEADER_PRICE                                   :{WHITE}Share Price
+STR_STOCK_MARKET_HEADER_AVAILABLE                               :{WHITE}Available
+STR_STOCK_MARKET_HEADER_YOUR_SHARES                             :{WHITE}Your Shares
+STR_STOCK_MARKET_UNITS_FRACTION                                 :{COMMA} / {COMMA}
+STR_STOCK_MARKET_BUY                                            :{BLACK}Buy Shares
+STR_STOCK_MARKET_BUY_TOOLTIP                                    :{BLACK}Buy one share of the selected company
+STR_STOCK_MARKET_SELL                                           :{BLACK}Sell Shares
+STR_STOCK_MARKET_SELL_TOOLTIP                                   :{BLACK}Sell one share of the selected company
+STR_STOCK_MARKET_MENU                                           :Stock marketplace
+
+STR_ERROR_STOCK_MARKET_DISABLED                                 :{WHITE}Stock marketplace is disabled
+STR_ERROR_STOCK_NOT_LISTED                                      :{WHITE}This company has not issued stock
+STR_ERROR_STOCK_TOO_MANY_SHARES                                 :{WHITE}Cannot issue more stock... maximum issuance reached
+STR_ERROR_STOCK_NOT_ENOUGH_AVAILABLE                            :{WHITE}Not enough shares available on the market
+STR_ERROR_STOCK_NOT_ENOUGH_HOLDINGS                             :{WHITE}You don't own enough shares to sell
+STR_ERROR_STOCK_CANNOT_BUY_OWN                                  :{WHITE}Cannot buy your own company's stock
+STR_ERROR_STOCK_CANNOT_BUY                                      :{WHITE}Cannot buy stock...
+STR_ERROR_STOCK_CANNOT_SELL                                     :{WHITE}Cannot sell stock...
+STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK                           :{WHITE}Not enough shares outstanding to buy back
+
 # Performance detail window
 STR_PERFORMANCE_DETAIL                                          :{WHITE}Detailed Performance Rating
 STR_PERFORMANCE_DETAIL_KEY                                      :{BLACK}Detail
@@ -1556,6 +1579,13 @@ STR_CONFIG_SETTING_TOWN_CARGO_SCALE_HELPTEXT                    :Scale the cargo
 STR_CONFIG_SETTING_INDUSTRY_CARGO_SCALE                         :Scale industry cargo production: {STRING2}
 STR_CONFIG_SETTING_INDUSTRY_CARGO_SCALE_HELPTEXT                :Scale the cargo production of industries by this percentage
 STR_CONFIG_SETTING_CARGO_SCALE_VALUE                            :{NUM}%
+
+STR_CONFIG_SETTING_STOCK_MARKET                                 :Enable stock marketplace: {STRING2}
+STR_CONFIG_SETTING_STOCK_MARKET_HELPTEXT                        :When enabled, companies can issue stock on the marketplace for other companies to buy and sell. Dividends are paid yearly based on company performance
+STR_CONFIG_SETTING_STOCK_MAX_ISSUE                              :Maximum stock issuance: {STRING2}
+STR_CONFIG_SETTING_STOCK_MAX_ISSUE_HELPTEXT                     :Maximum percentage of company value that can be issued as stock
+STR_CONFIG_SETTING_STOCK_DIVIDEND_RATE                          :Dividend rate: {STRING2}
+STR_CONFIG_SETTING_STOCK_DIVIDEND_RATE_HELPTEXT                 :Percentage of annual net profit distributed as dividends to shareholders
 
 STR_CONFIG_SETTING_AUTORENEW_VEHICLE                            :Autorenew vehicle when it gets old: {STRING2}
 STR_CONFIG_SETTING_AUTORENEW_VEHICLE_HELPTEXT                   :When enabled, a vehicle nearing its end of life gets automatically replaced when the renew conditions are fulfilled
@@ -3969,6 +3999,7 @@ STR_FINANCES_PERIOD_CAPTION                                     :{WHITE}Period
 STR_FINANCES_REVENUE_TITLE                                      :{WHITE}Revenue
 STR_FINANCES_OPERATING_EXPENSES_TITLE                           :{WHITE}Operating Expenses
 STR_FINANCES_CAPITAL_EXPENSES_TITLE                             :{WHITE}Capital Expenses
+STR_FINANCES_STOCK_TITLE                                        :{WHITE}Stock Market
 
 
 ###length 13
@@ -3985,6 +4016,8 @@ STR_FINANCES_SECTION_AIRCRAFT_REVENUE                           :{GOLD}Aircraft
 STR_FINANCES_SECTION_SHIP_REVENUE                               :{GOLD}Ships
 STR_FINANCES_SECTION_LOAN_INTEREST                              :{GOLD}Loan Interest
 STR_FINANCES_SECTION_OTHER                                      :{GOLD}Other
+STR_FINANCES_SECTION_STOCK_REVENUE                              :{GOLD}Stock Revenue
+STR_FINANCES_SECTION_DIVIDENDS                                  :{GOLD}Dividends
 
 STR_FINANCES_TOTAL_CAPTION                                      :{WHITE}Total
 STR_FINANCES_NEGATIVE_INCOME                                    :-{CURRENCY_LONG}

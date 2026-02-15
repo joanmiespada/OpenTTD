@@ -55,6 +55,9 @@
 #include "misc_cmd.h"
 #include "league_gui.h"
 #include "league_base.h"
+#include "settings_type.h"
+
+void ShowStockMarketWindow();
 #include "timer/timer.h"
 #include "timer/timer_window.h"
 #include "timer/timer_game_calendar.h"
@@ -659,6 +662,7 @@ static const int GRMN_CARGO_PAYMENT_RATES = -6;       ///< Show cargo payment ra
 static const int LTMN_PERFORMANCE_LEAGUE = -7;        ///< Show default league table
 static const int LTMN_PERFORMANCE_RATING = -8;        ///< Show detailed performance rating
 static const int LTMN_HIGHSCORE          = -9;        ///< Show highscrore table
+static const int GRMN_STOCK_MARKET       = -10;       ///< Show stock marketplace
 
 static void AddDropDownLeagueTableOptions(DropDownList &list)
 {
@@ -685,6 +689,9 @@ static CallBackFunction ToolbarGraphsClick(Window *w)
 	list.push_back(MakeDropDownListStringItem(STR_GRAPH_MENU_PERFORMANCE_HISTORY_GRAPH, GRMN_PERFORMANCE_HISTORY_GRAPH));
 	list.push_back(MakeDropDownListStringItem(STR_GRAPH_MENU_COMPANY_VALUE_GRAPH, GRMN_COMPANY_VALUE_GRAPH));
 	list.push_back(MakeDropDownListStringItem(STR_GRAPH_MENU_CARGO_PAYMENT_RATES, GRMN_CARGO_PAYMENT_RATES));
+	if (_settings_game.economy.stock_market) {
+		list.push_back(MakeDropDownListStringItem(STR_STOCK_MARKET_MENU, GRMN_STOCK_MARKET));
+	}
 
 	if (_toolbar_mode != TB_NORMAL) AddDropDownLeagueTableOptions(list);
 
@@ -718,6 +725,7 @@ static CallBackFunction MenuClickGraphsOrLeague(int index)
 		case GRMN_PERFORMANCE_HISTORY_GRAPH: ShowPerformanceHistoryGraph(); break;
 		case GRMN_COMPANY_VALUE_GRAPH: ShowCompanyValueGraph(); break;
 		case GRMN_CARGO_PAYMENT_RATES: ShowCargoPaymentRates(); break;
+		case GRMN_STOCK_MARKET: ShowStockMarketWindow(); break;
 		case LTMN_PERFORMANCE_LEAGUE: ShowPerformanceLeagueTable(); break;
 		case LTMN_PERFORMANCE_RATING: ShowPerformanceRatingDetail(); break;
 		case LTMN_HIGHSCORE: ShowHighscoreTable(); break;
