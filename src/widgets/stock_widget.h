@@ -12,11 +12,29 @@
 
 /** Widgets of the #StockMarketWindow class. */
 enum StockMarketWidgets : WidgetID {
-	WID_STM_CAPTION,      ///< Caption of the window.
-	WID_STM_COMPANY_LIST, ///< Scrollable list of listed companies.
-	WID_STM_SCROLLBAR,    ///< Scrollbar for the company list.
-	WID_STM_BUY_BUTTON,   ///< Buy shares button.
-	WID_STM_SELL_BUTTON,  ///< Sell shares button.
+	WID_STM_CAPTION,              ///< Caption of the window.
+
+	/* Top panel - My Company Stock */
+	WID_STM_MY_COMPANY_PANEL,     ///< Panel displaying own company stock info.
+	WID_STM_INFO_LISTED,          ///< Label: listed status.
+	WID_STM_INFO_SHARE_PRICE,     ///< Label: share price.
+	WID_STM_INFO_TOTAL_ISSUED,    ///< Label: total units issued.
+	WID_STM_INFO_AVAILABLE,       ///< Label: available units.
+	WID_STM_INFO_PREMIUM,         ///< Label: price premium.
+	WID_STM_INFO_LAST_DIVIDEND,   ///< Label: last dividend per unit.
+	WID_STM_INFO_TOTAL_DIVIDENDS, ///< Label: total dividends paid.
+	WID_STM_ISSUE_SHARES,         ///< Button to issue new shares.
+	WID_STM_SET_PREMIUM,          ///< Button to set stock premium.
+	WID_STM_BUYBACK_SHARES,       ///< Button to buy back shares.
+	WID_STM_SHAREHOLDERS_PANEL,   ///< Scrollable panel listing shareholders.
+	WID_STM_SHAREHOLDERS_SCROLLBAR, ///< Scrollbar for shareholders list.
+
+	/* Bottom panel - Stock Market */
+	WID_STM_MARKET_LABEL,         ///< Label for the market section.
+	WID_STM_COMPANY_LIST,         ///< Scrollable list of listed companies.
+	WID_STM_SCROLLBAR,            ///< Scrollbar for the company list.
+	WID_STM_BUY_BUTTON,          ///< Buy shares button.
+	WID_STM_SELL_BUTTON,          ///< Sell shares button.
 };
 
 #endif /* WIDGETS_STOCK_WIDGET_H */

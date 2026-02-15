@@ -675,17 +675,47 @@ STR_COMPANY_LEAGUE_PERFORMANCE_TITLE_PRESIDENT                  :President
 STR_COMPANY_LEAGUE_PERFORMANCE_TITLE_TYCOON                     :Tycoon
 
 # Stock marketplace window
-STR_STOCK_MARKET_CAPTION                                        :{WHITE}Stock Marketplace
+STR_STOCK_MARKET_CAPTION                                        :{WHITE}Stock Management
+STR_STOCK_MARKET_MENU                                           :Stock marketplace
+
+# My Company Stock section
+STR_STOCK_MY_COMPANY_TITLE                                      :{BLACK}My Company Stock
+STR_STOCK_INFO_LISTED                                           :{BLACK}Listed: {STRING}
+STR_STOCK_INFO_LISTED_YES                                       :{GREEN}Yes
+STR_STOCK_INFO_LISTED_NO                                        :{RED}No
+STR_STOCK_INFO_SHARE_PRICE                                      :{BLACK}Share Price: {CURRENCY_LONG}
+STR_STOCK_INFO_TOTAL_ISSUED                                     :{BLACK}Total Issued: {COMMA} units
+STR_STOCK_INFO_AVAILABLE                                        :{BLACK}Available: {COMMA} units
+STR_STOCK_INFO_PREMIUM                                          :{BLACK}Premium: {CURRENCY_LONG}
+STR_STOCK_INFO_LAST_DIVIDEND                                    :{BLACK}Last Dividend: {CURRENCY_LONG} / unit
+STR_STOCK_INFO_TOTAL_DIVIDENDS                                  :{BLACK}Total Dividends Paid: {CURRENCY_LONG}
+STR_STOCK_ISSUE_SHARES                                          :{BLACK}Issue Shares
+STR_STOCK_ISSUE_SHARES_TOOLTIP                                  :{BLACK}Issue new shares on the market. Ctrl+Click to issue maximum
+STR_STOCK_ISSUE_SHARES_QUERY                                    :Enter the number of share units to issue
+STR_STOCK_SET_PREMIUM                                           :{BLACK}Set Premium
+STR_STOCK_SET_PREMIUM_TOOLTIP                                   :{BLACK}Set a premium on top of the base share price. Ctrl+Click to reset to zero
+STR_STOCK_SET_PREMIUM_QUERY                                     :Enter the stock premium amount
+STR_STOCK_BUYBACK_SHARES                                        :{BLACK}Buyback Shares
+STR_STOCK_BUYBACK_SHARES_TOOLTIP                                :{BLACK}Buy back shares from the market. Ctrl+Click to buy back all available
+STR_STOCK_BUYBACK_SHARES_QUERY                                  :Enter the number of share units to buy back
+STR_STOCK_SHAREHOLDERS_HEADER                                   :{BLACK}Shareholders
+STR_STOCK_SHAREHOLDER_LINE                                      :{BLACK}{STRING} - {COMMA} units ({COMMA}%)
+STR_STOCK_NO_SHAREHOLDERS                                       :{BLACK}No shareholders
+
+# Stock Market section
+STR_STOCK_MARKET_TITLE                                          :{BLACK}Stock Market
 STR_STOCK_MARKET_HEADER_COMPANY                                 :{WHITE}Company
 STR_STOCK_MARKET_HEADER_PRICE                                   :{WHITE}Share Price
 STR_STOCK_MARKET_HEADER_AVAILABLE                               :{WHITE}Available
-STR_STOCK_MARKET_HEADER_YOUR_SHARES                             :{WHITE}Your Shares
+STR_STOCK_MARKET_HEADER_YOUR_SHARES                             :{WHITE}Holdings
+STR_STOCK_MARKET_HEADER_PL                                      :{WHITE}P&&L
 STR_STOCK_MARKET_UNITS_FRACTION                                 :{COMMA} / {COMMA}
 STR_STOCK_MARKET_BUY                                            :{BLACK}Buy Shares
-STR_STOCK_MARKET_BUY_TOOLTIP                                    :{BLACK}Buy one share of the selected company
+STR_STOCK_MARKET_BUY_TOOLTIP                                    :{BLACK}Buy shares of the selected company. Ctrl+Click to buy maximum available
+STR_STOCK_MARKET_BUY_QUERY                                      :Enter the number of share units to buy
 STR_STOCK_MARKET_SELL                                           :{BLACK}Sell Shares
-STR_STOCK_MARKET_SELL_TOOLTIP                                   :{BLACK}Sell one share of the selected company
-STR_STOCK_MARKET_MENU                                           :Stock marketplace
+STR_STOCK_MARKET_SELL_TOOLTIP                                   :{BLACK}Sell shares of the selected company. Ctrl+Click to sell all holdings
+STR_STOCK_MARKET_SELL_QUERY                                     :Enter the number of share units to sell
 
 STR_ERROR_STOCK_MARKET_DISABLED                                 :{WHITE}Stock marketplace is disabled
 STR_ERROR_STOCK_NOT_LISTED                                      :{WHITE}This company has not issued stock
@@ -4073,6 +4103,8 @@ STR_COMPANY_VIEW_GIVE_MONEY_BUTTON                              :{BLACK}Give mon
 STR_COMPANY_VIEW_GIVE_MONEY_TOOLTIP                             :{BLACK}Give money to this company
 STR_COMPANY_VIEW_HOSTILE_TAKEOVER_BUTTON                        :{BLACK}Hostile takeover
 STR_COMPANY_VIEW_HOSTILE_TAKEOVER_TOOLTIP                       :{BLACK}Do a hostile takeover of this company
+STR_COMPANY_VIEW_STOCKS_BUTTON                                  :{BLACK}Stocks
+STR_COMPANY_VIEW_STOCKS_TOOLTIP                                 :{BLACK}Open the stock management window
 
 STR_COMPANY_VIEW_NEW_FACE_BUTTON                                :{BLACK}New Face
 STR_COMPANY_VIEW_NEW_FACE_TOOLTIP                               :{BLACK}Select new face for manager
