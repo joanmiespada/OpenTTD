@@ -696,6 +696,8 @@ STR_ERROR_STOCK_CANNOT_BUY_OWN                                  :{WHITE}Cannot b
 STR_ERROR_STOCK_CANNOT_BUY                                      :{WHITE}Cannot buy stock...
 STR_ERROR_STOCK_CANNOT_SELL                                     :{WHITE}Cannot sell stock...
 STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK                           :{WHITE}Not enough shares outstanding to buy back
+STR_ERROR_STOCK_COMPANY_CANNOT_AFFORD                           :{WHITE}The issuing company cannot afford to buy back shares
+STR_ERROR_STOCK_PREMIUM_TOO_HIGH                                :{WHITE}Stock premium is too high
 
 # Performance detail window
 STR_PERFORMANCE_DETAIL                                          :{WHITE}Detailed Performance Rating
@@ -4002,7 +4004,7 @@ STR_FINANCES_CAPITAL_EXPENSES_TITLE                             :{WHITE}Capital 
 STR_FINANCES_STOCK_TITLE                                        :{WHITE}Stock Market
 
 
-###length 13
+###length 15
 STR_FINANCES_SECTION_CONSTRUCTION                               :{GOLD}Construction
 STR_FINANCES_SECTION_NEW_VEHICLES                               :{GOLD}New Vehicles
 STR_FINANCES_SECTION_TRAIN_RUNNING_COSTS                        :{GOLD}Trains

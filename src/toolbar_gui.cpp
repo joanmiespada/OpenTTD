@@ -56,8 +56,6 @@
 #include "league_gui.h"
 #include "league_base.h"
 #include "settings_type.h"
-
-void ShowStockMarketWindow();
 #include "timer/timer.h"
 #include "timer/timer_window.h"
 #include "timer/timer_game_calendar.h"
@@ -73,6 +71,8 @@ void ShowStockMarketWindow();
 #include "table/strings.h"
 
 #include "dropdown_common_type.h"
+
+void ShowStockMarketWindow();
 
 #include "safeguards.h"
 

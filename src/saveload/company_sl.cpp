@@ -524,11 +524,6 @@ public:
 		SlObject(&c->stock_info, this->GetLoadDescription());
 	}
 
-	void FixPointers(CompanyProperties *c) const override
-	{
-		SlObject(&c->stock_info, this->GetDescription());
-	}
-
 	void LoadCheck(CompanyProperties *c) const override { this->Load(c); }
 };
 

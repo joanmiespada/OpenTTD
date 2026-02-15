@@ -30,9 +30,10 @@
 class StockMarketWindow : public Window {
 private:
 	GUIList<const Company *> companies{};
+	Scrollbar *vscroll = nullptr;
 	int line_height = 0;
 	Dimension icon{};
-	int selected_index = -1;
+	CompanyID selected_company = CompanyID::Invalid();
 
 	void BuildCompanyList()
 	{
@@ -70,8 +71,9 @@ public:
 		this->vscroll->SetCount(static_cast<int>(this->companies.size()));
 
 		/* Disable buy/sell buttons if no selection */
-		this->SetWidgetDisabledState(WID_STM_BUY_BUTTON, this->selected_index < 0);
-		this->SetWidgetDisabledState(WID_STM_SELL_BUTTON, this->selected_index < 0);
+		bool no_selection = this->selected_company == CompanyID::Invalid();
+		this->SetWidgetDisabledState(WID_STM_BUY_BUTTON, no_selection);
+		this->SetWidgetDisabledState(WID_STM_SELL_BUTTON, no_selection);
 
 		this->DrawWidgets();
 	}
@@ -97,7 +99,7 @@ public:
 		for (int i = pos; i < max && i < static_cast<int>(this->companies.size()); i++) {
 			const Company *c = this->companies[i];
 
-			bool selected = (i == this->selected_index);
+			bool selected = (c->index == this->selected_company);
 			if (selected) {
 				GfxFillRect(ir.left, ir.top, ir.right, ir.top + this->line_height - 1, PC_DARK_BLUE);
 			}
@@ -149,26 +151,23 @@ public:
 				int row = (pt.y - r.top - this->line_height) / this->line_height;
 				row += this->vscroll->GetPosition();
 				if (row >= 0 && row < static_cast<int>(this->companies.size())) {
-					this->selected_index = row;
+					this->selected_company = this->companies[row]->index;
 				} else {
-					this->selected_index = -1;
+					this->selected_company = CompanyID::Invalid();
 				}
 				this->SetDirty();
 				break;
 			}
 
 			case WID_STM_BUY_BUTTON: {
-				if (this->selected_index < 0 || this->selected_index >= static_cast<int>(this->companies.size())) break;
-				const Company *c = this->companies[this->selected_index];
-				/* Buy 1 unit for now - could add a quantity dialog */
-				Command<Commands::BuyStock>::Post(STR_ERROR_STOCK_CANNOT_BUY, c->index, uint16_t(1));
+				if (this->selected_company == CompanyID::Invalid()) break;
+				Command<Commands::BuyStock>::Post(STR_ERROR_STOCK_CANNOT_BUY, this->selected_company, uint16_t(1));
 				break;
 			}
 
 			case WID_STM_SELL_BUTTON: {
-				if (this->selected_index < 0 || this->selected_index >= static_cast<int>(this->companies.size())) break;
-				const Company *c = this->companies[this->selected_index];
-				Command<Commands::SellStock>::Post(STR_ERROR_STOCK_CANNOT_SELL, c->index, uint16_t(1));
+				if (this->selected_company == CompanyID::Invalid()) break;
+				Command<Commands::SellStock>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_company, uint16_t(1));
 				break;
 			}
 		}
@@ -185,9 +184,6 @@ public:
 			this->SetDirty();
 		}
 	}
-
-private:
-	Scrollbar *vscroll = nullptr;
 };
 
 static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets = {

@@ -2013,19 +2013,24 @@ static void DoAcquireCompany(Company *c, bool hostile_takeover)
 				[](const StockHolding &h) { return h.units == 0; }), holders.end());
 		}
 
-		/* Stock issued by the acquired company: pay out holders at last share price. */
+		/* Stock issued by the acquired company: pay out holders at last share price.
+		 * The payout is debited from the acquired company before deletion. */
 		if (c->stock_info.listed) {
 			for (auto &holder : c->stock_info.holders) {
 				Company *holder_company = Company::GetIfValid(holder.owner);
 				if (holder_company == nullptr) continue;
 
 				Money payout = c->stock_info.share_price * holder.units;
+				c->money -= payout;
+				c->yearly_expenses[0][EXPENSES_DIVIDENDS] -= payout;
 				holder_company->money += payout;
 				holder_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payout;
 			}
 			c->stock_info.holders.clear();
 			c->stock_info.listed = false;
 		}
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
 
 	ChangeOwnershipOfCompanyItems(ci, _current_company);

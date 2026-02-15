@@ -37,6 +37,8 @@
 #include "goal_base.h"
 #include "story_base.h"
 #include "company_cmd.h"
+#include "stock_type.h"
+#include "settings_type.h"
 #include "timer/timer.h"
 #include "timer/timer_game_economy.h"
 #include "timer/timer_game_tick.h"
@@ -977,6 +979,35 @@ CommandCost CmdCompanyCtrl(DoCommandFlags flags, CompanyCtrlAction cca, CompanyI
 			auto cni = std::make_unique<CompanyNewsInformation>(STR_NEWS_COMPANY_BANKRUPT_TITLE, c);
 			EncodedString headline = GetEncodedString(STR_NEWS_COMPANY_BANKRUPT_DESCRIPTION, cni->company_name);
 			AddCompanyNewsItem(std::move(headline), std::move(cni));
+
+			/* Clean up stock marketplace data for the bankrupt company. */
+			if (_settings_game.economy.stock_market) {
+				/* Remove holdings the bankrupt company had in other companies. */
+				for (Company *other : Company::Iterate()) {
+					if (other->index == c->index) continue;
+					if (!other->stock_info.listed) continue;
+
+					StockHolding *held = other->stock_info.FindHolder(c->index);
+					if (held == nullptr || held->units == 0) continue;
+
+					/* Return units to the market */
+					other->stock_info.available_units += held->units;
+					held->units = 0;
+
+					/* Clean up empty holding */
+					auto &holders = other->stock_info.holders;
+					holders.erase(std::remove_if(holders.begin(), holders.end(),
+						[](const StockHolding &h) { return h.units == 0; }), holders.end());
+				}
+
+				/* Stock issued by the bankrupt company: holders lose their investment. */
+				if (c->stock_info.listed) {
+					c->stock_info.holders.clear();
+					c->stock_info.listed = false;
+				}
+
+				InvalidateWindowClassesData(WC_STOCK_MARKET);
+			}
 
 			/* Remove the company */
 			ChangeOwnershipOfCompanyItems(c->index, INVALID_OWNER);

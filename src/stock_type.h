@@ -19,6 +19,9 @@ static constexpr uint16_t MAX_STOCK_UNITS = 1200;
 /** Each stock unit represents 0.01% of the company. */
 static constexpr uint16_t STOCK_UNIT_SCALE = 100;
 
+/** Maximum premium that can be set on stock (to prevent overflow). */
+static constexpr Money MAX_STOCK_PREMIUM = 1000000000LL; // 1 billion
+
 /** Represents a stock holding by one company in another. */
 struct StockHolding {
 	CompanyID owner;         ///< Who owns these shares.
@@ -44,7 +47,9 @@ struct CompanyStockInfo {
 	uint16_t GetHeldUnits() const
 	{
 		uint16_t held = 0;
-		for (const auto &h : this->holders) held += h.units;
+		for (const auto &h : this->holders) {
+			held += h.units;
+		}
 		return held;
 	}
 

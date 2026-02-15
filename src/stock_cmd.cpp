@@ -17,6 +17,7 @@
 #include "game/game.hpp"
 #include "strings_func.h"
 #include "settings_type.h"
+#include "window_func.h"
 #include "timer/timer.h"
 #include "timer/timer_game_economy.h"
 
@@ -82,6 +83,8 @@ void UpdateStockPrices()
 		if (!c->stock_info.listed) continue;
 		c->stock_info.share_price = CalculateSharePrice(c);
 	}
+
+	InvalidateWindowClassesData(WC_STOCK_MARKET);
 }
 
 /**
@@ -128,12 +131,12 @@ void PayAnnualDividends()
 		c->stock_info.last_dividend_per_unit = dividend_per_unit;
 
 		for (auto &holder : c->stock_info.holders) {
-			Money payment = holder.units * dividend_per_unit;
-
-			/* Pay dividend: deduct from issuing company, credit to holder */
 			Company *holder_company = Company::GetIfValid(holder.owner);
 			if (holder_company == nullptr) continue;
 
+			Money payment = holder.units * dividend_per_unit;
+
+			/* Pay dividend: deduct from issuing company, credit to holder */
 			c->money -= payment;
 			c->yearly_expenses[0][EXPENSES_DIVIDENDS] -= payment;
 			c->stock_info.total_dividends_paid += payment;
@@ -142,6 +145,8 @@ void PayAnnualDividends()
 			holder_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
 		}
 	}
+
+	InvalidateWindowClassesData(WC_STOCK_MARKET);
 }
 
 /**
@@ -165,21 +170,20 @@ CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue)
 		return CommandCost(STR_ERROR_STOCK_TOO_MANY_SHARES);
 	}
 
-	if (flags.Test(DoCommandFlag::Execute)) {
-		Money price_per_unit = CalculateSharePrice(c);
+	Money price_per_unit = CalculateSharePrice(c);
+	Money proceeds = price_per_unit * units_to_issue;
 
+	if (flags.Test(DoCommandFlag::Execute)) {
 		c->stock_info.listed = true;
 		c->stock_info.total_issued += units_to_issue;
 		c->stock_info.available_units += units_to_issue;
 		c->stock_info.share_price = price_per_unit;
 
-		/* Company receives the proceeds from issuance */
-		Money proceeds = price_per_unit * units_to_issue;
-		c->money += proceeds;
-		c->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += proceeds;
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
 
-	return CommandCost();
+	/* Negative cost = company receives the proceeds */
+	return CommandCost(EXPENSES_STOCK_REVENUE, -proceeds);
 }
 
 /**
@@ -222,6 +226,8 @@ CommandCost CmdBuyStock(DoCommandFlags flags, CompanyID target, uint16_t units)
 		/* Target company receives the money */
 		target_company->money += cost;
 		target_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += cost;
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
 
 	return ret;
@@ -247,8 +253,11 @@ CommandCost CmdSellStock(DoCommandFlags flags, CompanyID target, uint16_t units)
 	StockHolding *holding = target_company->stock_info.FindHolder(_current_company);
 	if (holding == nullptr || holding->units < units) return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_HOLDINGS);
 
-	/* Seller receives current market price */
+	/* Seller receives current market price, target company pays */
 	Money revenue = target_company->stock_info.share_price * units;
+
+	/* Check target company can afford to buy back */
+	if (target_company->money < revenue) return CommandCost(STR_ERROR_STOCK_COMPANY_CANNOT_AFFORD);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
 		holding->units -= units;
@@ -261,12 +270,18 @@ CommandCost CmdSellStock(DoCommandFlags flags, CompanyID target, uint16_t units)
 
 		target_company->stock_info.available_units += units;
 
+		/* Debit the target company */
+		target_company->money -= revenue;
+		target_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] -= revenue;
+
 		/* Credit the seller */
 		Company *seller = Company::GetIfValid(_current_company);
 		if (seller != nullptr) {
 			seller->money += revenue;
 			seller->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += revenue;
 		}
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
 
 	return CommandCost();
@@ -287,10 +302,13 @@ CommandCost CmdSetStockPremium(DoCommandFlags flags, Money premium)
 
 	if (!c->stock_info.listed) return CommandCost(STR_ERROR_STOCK_NOT_LISTED);
 	if (premium < 0) return CMD_ERROR;
+	if (premium > MAX_STOCK_PREMIUM) return CommandCost(STR_ERROR_STOCK_PREMIUM_TOO_HIGH);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
 		c->stock_info.price_premium = premium;
 		c->stock_info.share_price = CalculateSharePrice(c);
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
 
 	return CommandCost();
@@ -324,7 +342,7 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units)
 	CommandCost ret(EXPENSES_OTHER, cost);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
-		/* Buy back from holders proportionally */
+		/* Buy back from holders sequentially */
 		uint16_t remaining = buyback_from_holders;
 		for (auto &holder : c->stock_info.holders) {
 			if (remaining == 0) break;
@@ -357,6 +375,8 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units)
 		if (c->stock_info.total_issued == 0) {
 			c->stock_info.listed = false;
 		}
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
 
 	return ret;
