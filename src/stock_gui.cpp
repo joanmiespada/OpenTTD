@@ -56,7 +56,7 @@ public:
 	StockMarketWindow(WindowDesc &desc, WindowNumber window_number) : Window(desc)
 	{
 		this->CreateNestedTree();
-		this->vscroll = this->GetScrollbar(WID_SM_SCROLLBAR);
+		this->vscroll = this->GetScrollbar(WID_STM_SCROLLBAR);
 		this->FinishInitNested(window_number);
 
 		this->companies.ForceRebuild();
@@ -70,15 +70,15 @@ public:
 		this->vscroll->SetCount(static_cast<int>(this->companies.size()));
 
 		/* Disable buy/sell buttons if no selection */
-		this->SetWidgetDisabledState(WID_SM_BUY_BUTTON, this->selected_index < 0);
-		this->SetWidgetDisabledState(WID_SM_SELL_BUTTON, this->selected_index < 0);
+		this->SetWidgetDisabledState(WID_STM_BUY_BUTTON, this->selected_index < 0);
+		this->SetWidgetDisabledState(WID_STM_SELL_BUTTON, this->selected_index < 0);
 
 		this->DrawWidgets();
 	}
 
 	void DrawWidget(const Rect &r, WidgetID widget) const override
 	{
-		if (widget != WID_SM_COMPANY_LIST) return;
+		if (widget != WID_STM_COMPANY_LIST) return;
 
 		Rect ir = r.Shrink(WidgetDimensions::scaled.framerect);
 		int icon_y_offset = (this->line_height - this->icon.height) / 2;
@@ -106,7 +106,7 @@ public:
 
 			/* Company name */
 			DrawString(ir.left + this->icon.width + 4, ir.left + 200, ir.top + text_y_offset,
-				GetString(STR_JUST_COMPANY, c->index), selected ? TC_WHITE : TC_BLACK);
+				GetString(STR_COMPANY_NAME, c->index), selected ? TC_WHITE : TC_BLACK);
 
 			/* Share price */
 			DrawString(ir.left + 210, ir.left + 310, ir.top + text_y_offset,
@@ -128,7 +128,7 @@ public:
 
 	void UpdateWidgetSize(WidgetID widget, Dimension &size, [[maybe_unused]] const Dimension &padding, [[maybe_unused]] Dimension &fill, [[maybe_unused]] Dimension &resize) override
 	{
-		if (widget != WID_SM_COMPANY_LIST) return;
+		if (widget != WID_STM_COMPANY_LIST) return;
 
 		this->icon = GetSpriteSize(SPR_COMPANY_ICON);
 		this->line_height = std::max<int>(this->icon.height + WidgetDimensions::scaled.vsep_normal, GetCharacterHeight(FS_NORMAL) + 2);
@@ -143,7 +143,7 @@ public:
 	void OnClick(Point pt, WidgetID widget, [[maybe_unused]] int click_count) override
 	{
 		switch (widget) {
-			case WID_SM_COMPANY_LIST: {
+			case WID_STM_COMPANY_LIST: {
 				Rect r = this->GetWidget<NWidgetBase>(widget)->GetCurrentRect().Shrink(WidgetDimensions::scaled.framerect);
 				/* Account for header line */
 				int row = (pt.y - r.top - this->line_height) / this->line_height;
@@ -157,7 +157,7 @@ public:
 				break;
 			}
 
-			case WID_SM_BUY_BUTTON: {
+			case WID_STM_BUY_BUTTON: {
 				if (this->selected_index < 0 || this->selected_index >= static_cast<int>(this->companies.size())) break;
 				const Company *c = this->companies[this->selected_index];
 				/* Buy 1 unit for now - could add a quantity dialog */
@@ -165,7 +165,7 @@ public:
 				break;
 			}
 
-			case WID_SM_SELL_BUTTON: {
+			case WID_STM_SELL_BUTTON: {
 				if (this->selected_index < 0 || this->selected_index >= static_cast<int>(this->companies.size())) break;
 				const Company *c = this->companies[this->selected_index];
 				Command<Commands::SellStock>::Post(STR_ERROR_STOCK_CANNOT_SELL, c->index, uint16_t(1));
@@ -193,20 +193,20 @@ private:
 static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets = {
 	NWidget(NWID_HORIZONTAL),
 		NWidget(WWT_CLOSEBOX, COLOUR_BROWN),
-		NWidget(WWT_CAPTION, COLOUR_BROWN, WID_SM_CAPTION), SetStringTip(STR_STOCK_MARKET_CAPTION, STR_TOOLTIP_WINDOW_TITLE_DRAG_THIS),
+		NWidget(WWT_CAPTION, COLOUR_BROWN, WID_STM_CAPTION), SetStringTip(STR_STOCK_MARKET_CAPTION, STR_TOOLTIP_WINDOW_TITLE_DRAG_THIS),
 		NWidget(WWT_SHADEBOX, COLOUR_BROWN),
 		NWidget(WWT_STICKYBOX, COLOUR_BROWN),
 	EndContainer(),
 	NWidget(NWID_HORIZONTAL),
-		NWidget(WWT_PANEL, COLOUR_BROWN, WID_SM_COMPANY_LIST), SetMinimalSize(550, 200), SetResize(0, 10), SetScrollbar(WID_SM_SCROLLBAR),
+		NWidget(WWT_PANEL, COLOUR_BROWN, WID_STM_COMPANY_LIST), SetMinimalSize(550, 200), SetResize(0, 10), SetScrollbar(WID_STM_SCROLLBAR),
 		EndContainer(),
 		NWidget(NWID_VERTICAL),
-			NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_SM_SCROLLBAR),
+			NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_STM_SCROLLBAR),
 		EndContainer(),
 	EndContainer(),
 	NWidget(NWID_HORIZONTAL),
-		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_SM_BUY_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_MARKET_BUY, STR_STOCK_MARKET_BUY_TOOLTIP),
-		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_SM_SELL_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_MARKET_SELL, STR_STOCK_MARKET_SELL_TOOLTIP),
+		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_BUY_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_MARKET_BUY, STR_STOCK_MARKET_BUY_TOOLTIP),
+		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_SELL_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_MARKET_SELL, STR_STOCK_MARKET_SELL_TOOLTIP),
 	EndContainer(),
 };
 

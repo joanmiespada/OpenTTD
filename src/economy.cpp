@@ -1988,6 +1988,46 @@ static void DoAcquireCompany(Company *c, bool hostile_takeover)
 	AI::BroadcastNewEvent(new ScriptEventCompanyMerger(ci, _current_company));
 	Game::NewEvent(new ScriptEventCompanyMerger(ci, _current_company));
 
+	/* Handle stock marketplace cleanup for the acquired company. */
+	if (_settings_game.economy.stock_market) {
+		/* Stock held by the acquired company in other companies transfers to acquirer. */
+		for (Company *other : Company::Iterate()) {
+			if (other->index == ci || other->index == _current_company) continue;
+			if (!other->stock_info.listed) continue;
+
+			StockHolding *held = other->stock_info.FindHolder(ci);
+			if (held == nullptr || held->units == 0) continue;
+
+			/* Transfer holdings to acquiring company */
+			StockHolding *acquirer_held = other->stock_info.FindHolder(_current_company);
+			if (acquirer_held != nullptr) {
+				acquirer_held->units += held->units;
+			} else {
+				other->stock_info.holders.push_back({_current_company, held->units, held->purchase_price});
+			}
+			held->units = 0;
+
+			/* Clean up empty holding */
+			auto &holders = other->stock_info.holders;
+			holders.erase(std::remove_if(holders.begin(), holders.end(),
+				[](const StockHolding &h) { return h.units == 0; }), holders.end());
+		}
+
+		/* Stock issued by the acquired company: pay out holders at last share price. */
+		if (c->stock_info.listed) {
+			for (auto &holder : c->stock_info.holders) {
+				Company *holder_company = Company::GetIfValid(holder.owner);
+				if (holder_company == nullptr) continue;
+
+				Money payout = c->stock_info.share_price * holder.units;
+				holder_company->money += payout;
+				holder_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payout;
+			}
+			c->stock_info.holders.clear();
+			c->stock_info.listed = false;
+		}
+	}
+
 	ChangeOwnershipOfCompanyItems(ci, _current_company);
 
 	if (c->is_ai) AI::Stop(c->index);

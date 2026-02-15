@@ -12,11 +12,11 @@
 
 /** Widgets of the #StockMarketWindow class. */
 enum StockMarketWidgets : WidgetID {
-	WID_SM_CAPTION,      ///< Caption of the window.
-	WID_SM_COMPANY_LIST, ///< Scrollable list of listed companies.
-	WID_SM_SCROLLBAR,    ///< Scrollbar for the company list.
-	WID_SM_BUY_BUTTON,   ///< Buy shares button.
-	WID_SM_SELL_BUTTON,  ///< Sell shares button.
+	WID_STM_CAPTION,      ///< Caption of the window.
+	WID_STM_COMPANY_LIST, ///< Scrollable list of listed companies.
+	WID_STM_SCROLLBAR,    ///< Scrollbar for the company list.
+	WID_STM_BUY_BUTTON,   ///< Buy shares button.
+	WID_STM_SELL_BUTTON,  ///< Sell shares button.
 };
 
 #endif /* WIDGETS_STOCK_WIDGET_H */

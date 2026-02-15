@@ -363,11 +363,11 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units)
 }
 
 /** Timer for quarterly stock price updates. */
-static IntervalTimer<TimerGameEconomy> _update_stock_prices({TimerGameEconomy::QUARTER, TimerGameEconomy::Priority::COMPANY}, [](auto) {
+static const IntervalTimer<TimerGameEconomy> _update_stock_prices({TimerGameEconomy::Trigger::Quarter, TimerGameEconomy::Priority::None}, [](auto) {
 	UpdateStockPrices();
 });
 
 /** Timer for yearly dividend payments. */
-static IntervalTimer<TimerGameEconomy> _pay_annual_dividends({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::COMPANY}, [](auto) {
+static const IntervalTimer<TimerGameEconomy> _pay_annual_dividends({TimerGameEconomy::Trigger::Year, TimerGameEconomy::Priority::None}, [](auto) {
 	PayAnnualDividends();
 });
