@@ -37,9 +37,21 @@ private:
 	GUIList<const Company *> market_companies{}; ///< Other listed companies for the market panel.
 	Scrollbar *market_vscroll = nullptr;         ///< Scrollbar for market company list.
 	Scrollbar *shareholders_vscroll = nullptr;   ///< Scrollbar for shareholders list.
+	Scrollbar *investments_vscroll = nullptr;    ///< Scrollbar for investments list.
 	int line_height = 0;                         ///< Height of a single row.
 	Dimension icon{};                            ///< Size of a company icon sprite.
 	CompanyID selected_company = CompanyID::Invalid(); ///< Currently selected company in market list.
+	CompanyID selected_investment = CompanyID::Invalid(); ///< Currently selected investment.
+
+	/** An investment entry for the My Investments panel. */
+	struct InvestmentEntry {
+		CompanyID target;       ///< Company we hold stock in.
+		uint16_t units;         ///< Number of units held.
+		Money current_value;    ///< units * current share_price.
+		Money cost_basis;       ///< units * purchase_price.
+		Money pl;               ///< current_value - cost_basis.
+	};
+	std::vector<InvestmentEntry> investments; ///< Current investment entries.
 
 	enum QueryType {
 		QUERY_NONE,
@@ -47,6 +59,7 @@ private:
 		QUERY_BUYBACK_SHARES,
 		QUERY_BUY_STOCK,
 		QUERY_SELL_STOCK,
+		QUERY_SELL_INVESTMENT,
 	};
 	QueryType active_query = QUERY_NONE;
 
@@ -57,11 +70,30 @@ private:
 
 		this->market_companies.clear();
 		for (const Company *c : Company::Iterate()) {
-			if (c->stock_info.listed && c->index != _local_company) {
+			if (c->stock_info.listed) {
 				this->market_companies.push_back(c);
 			}
 		}
 		this->market_companies.RebuildDone();
+	}
+
+	/** Rebuild the list of investments held by the local company in other companies. */
+	void BuildInvestmentsList()
+	{
+		this->investments.clear();
+		for (const Company *c : Company::Iterate()) {
+			if (c->index == _local_company) continue;
+			const StockHolding *holding = c->stock_info.FindHolder(_local_company);
+			if (holding == nullptr || holding->units == 0) continue;
+
+			InvestmentEntry entry;
+			entry.target = c->index;
+			entry.units = holding->units;
+			entry.current_value = c->stock_info.share_price * static_cast<int64_t>(holding->units);
+			entry.cost_basis = holding->purchase_price * static_cast<int64_t>(holding->units);
+			entry.pl = entry.current_value - entry.cost_basis;
+			this->investments.push_back(entry);
+		}
 	}
 
 	static bool StockPriceSorter(const Company * const &a, const Company * const &b)
@@ -93,6 +125,7 @@ public:
 		this->CreateNestedTree();
 		this->market_vscroll = this->GetScrollbar(WID_STM_SCROLLBAR);
 		this->shareholders_vscroll = this->GetScrollbar(WID_STM_SHAREHOLDERS_SCROLLBAR);
+		this->investments_vscroll = this->GetScrollbar(WID_STM_INVESTMENTS_SCROLLBAR);
 		this->FinishInitNested(window_number);
 
 		this->market_companies.ForceRebuild();
@@ -104,6 +137,9 @@ public:
 		this->BuildCompanyList();
 		this->market_companies.Sort(&StockPriceSorter);
 		this->market_vscroll->SetCount(static_cast<int>(this->market_companies.size()));
+
+		this->BuildInvestmentsList();
+		this->investments_vscroll->SetCount(static_cast<int>(this->investments.size()));
 
 		const Company *my = Company::GetIfValid(_local_company);
 		bool is_listed = (my != nullptr && my->stock_info.listed);
@@ -119,10 +155,14 @@ public:
 		this->SetWidgetDisabledState(WID_STM_ISSUE_SHARES, my == nullptr);
 		this->SetWidgetDisabledState(WID_STM_BUYBACK_SHARES, !is_listed);
 
-		/* Disable buy/sell buttons if no selection in market list. */
+		/* Disable buy/sell buttons if no selection or own company selected. */
 		bool no_selection = this->selected_company == CompanyID::Invalid();
-		this->SetWidgetDisabledState(WID_STM_BUY_BUTTON, no_selection);
-		this->SetWidgetDisabledState(WID_STM_SELL_BUTTON, no_selection);
+		bool is_own_company = (this->selected_company == _local_company);
+		this->SetWidgetDisabledState(WID_STM_BUY_BUTTON, no_selection || is_own_company);
+		this->SetWidgetDisabledState(WID_STM_SELL_BUTTON, no_selection || is_own_company);
+
+		/* Disable sell investment button if no investment selected. */
+		this->SetWidgetDisabledState(WID_STM_SELL_INVESTMENT_BUTTON, this->selected_investment == CompanyID::Invalid());
 
 		this->DrawWidgets();
 	}
@@ -136,6 +176,10 @@ public:
 
 			case WID_STM_SHAREHOLDERS_PANEL:
 				this->DrawShareholdersPanel(r);
+				break;
+
+			case WID_STM_INVESTMENTS_PANEL:
+				this->DrawInvestmentsPanel(r);
 				break;
 
 			case WID_STM_COMPANY_LIST:
@@ -190,6 +234,47 @@ public:
 			uint percentage = (my->stock_info.total_issued > 0) ? (h.units * 100 / my->stock_info.total_issued) : 0;
 			DrawString(ir.left + this->icon.width + 4, ir.right, ir.top + text_y_offset,
 				GetString(STR_STOCK_SHAREHOLDER_LINE, GetString(STR_COMPANY_NAME, h.owner), h.units, percentage));
+
+			ir.top += this->line_height;
+		}
+	}
+
+	/** Draw the investments scrollable panel. */
+	void DrawInvestmentsPanel(const Rect &r) const
+	{
+		Rect ir = r.Shrink(WidgetDimensions::scaled.framerect);
+
+		if (this->investments.empty()) {
+			DrawString(ir.left, ir.right, ir.top, STR_STOCK_NO_INVESTMENTS);
+			return;
+		}
+
+		int pos = this->investments_vscroll->GetPosition();
+		int max = pos + this->investments_vscroll->GetCapacity();
+		int icon_y_offset = (this->line_height - this->icon.height) / 2;
+		int text_y_offset = (this->line_height - GetCharacterHeight(FS_NORMAL)) / 2;
+
+		for (int i = pos; i < max && i < static_cast<int>(this->investments.size()); i++) {
+			const InvestmentEntry &inv = this->investments[i];
+
+			bool selected = (inv.target == this->selected_investment);
+			if (selected) {
+				GfxFillRect(ir.left, ir.top, ir.right, ir.top + this->line_height - 1, PC_DARK_BLUE);
+			}
+
+			DrawCompanyIcon(inv.target, ir.left, ir.top + icon_y_offset);
+
+			/* Build P&L string. */
+			std::string pl_str;
+			if (inv.pl >= 0) {
+				pl_str = GetString(STR_STOCK_INVESTMENT_PL_POSITIVE, inv.pl);
+			} else {
+				pl_str = GetString(STR_STOCK_INVESTMENT_PL_NEGATIVE, inv.pl);
+			}
+
+			DrawString(ir.left + this->icon.width + 4, ir.right, ir.top + text_y_offset,
+				GetString(STR_STOCK_INVESTMENT_LINE, GetString(STR_COMPANY_NAME, inv.target), inv.units, inv.current_value, pl_str),
+				selected ? TC_WHITE : TC_BLACK);
 
 			ir.top += this->line_height;
 		}
@@ -278,6 +363,11 @@ public:
 				resize.height = this->line_height;
 				break;
 
+			case WID_STM_INVESTMENTS_PANEL:
+				size.height = this->line_height * 3 + WidgetDimensions::scaled.framerect.Vertical();
+				resize.height = this->line_height;
+				break;
+
 			case WID_STM_COMPANY_LIST:
 				/* Header line + space for companies. */
 				size.height = this->line_height * (MAX_COMPANIES + 1) + WidgetDimensions::scaled.framerect.Vertical();
@@ -333,6 +423,36 @@ public:
 					this->selected_company = CompanyID::Invalid();
 				}
 				this->SetDirty();
+				break;
+			}
+
+			case WID_STM_INVESTMENTS_PANEL: {
+				Rect r = this->GetWidget<NWidgetBase>(widget)->GetCurrentRect().Shrink(WidgetDimensions::scaled.framerect);
+				int row = (pt.y - r.top) / this->line_height;
+				row += this->investments_vscroll->GetPosition();
+				if (row >= 0 && row < static_cast<int>(this->investments.size())) {
+					this->selected_investment = this->investments[row].target;
+				} else {
+					this->selected_investment = CompanyID::Invalid();
+				}
+				this->SetDirty();
+				break;
+			}
+
+			case WID_STM_SELL_INVESTMENT_BUTTON: {
+				if (this->selected_investment == CompanyID::Invalid()) break;
+				const Company *target = Company::GetIfValid(this->selected_investment);
+				if (target == nullptr) break;
+				const StockHolding *holding = target->stock_info.FindHolder(_local_company);
+				if (holding == nullptr || holding->units == 0) break;
+
+				if (_ctrl_pressed) {
+					/* Sell all at current market price. */
+					Command<Commands::PlaceSellOrder>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_investment, holding->units, target->stock_info.share_price);
+				} else {
+					ShowQueryString({}, STR_STOCK_SELL_INVESTMENT_QUERY, 10, this, CS_NUMERAL, {});
+					this->active_query = QUERY_SELL_INVESTMENT;
+				}
 				break;
 			}
 
@@ -419,6 +539,18 @@ public:
 				break;
 			}
 
+			case QUERY_SELL_INVESTMENT: {
+				if (this->selected_investment == CompanyID::Invalid()) return;
+				auto value = ParseInteger<uint64_t>(*str, 10, true);
+				if (!value.has_value() || *value == 0) return;
+				const Company *target = Company::GetIfValid(this->selected_investment);
+				if (target != nullptr) {
+					uint16_t sell_units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
+					Command<Commands::PlaceSellOrder>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_investment, sell_units, target->stock_info.share_price);
+				}
+				break;
+			}
+
 			default:
 				break;
 		}
@@ -456,11 +588,26 @@ static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets
 				NWidget(WWT_PUSHTXTBTN, COLOUR_GREY, WID_STM_ISSUE_SHARES), SetFill(1, 0), SetStringTip(STR_STOCK_ISSUE_SHARES, STR_STOCK_ISSUE_SHARES_TOOLTIP),
 				NWidget(WWT_PUSHTXTBTN, COLOUR_GREY, WID_STM_BUYBACK_SHARES), SetFill(1, 0), SetStringTip(STR_STOCK_BUYBACK_SHARES, STR_STOCK_BUYBACK_SHARES_TOOLTIP),
 			EndContainer(),
-			NWidget(WWT_TEXT, INVALID_COLOUR), SetStringTip(STR_STOCK_SHAREHOLDERS_HEADER), SetFill(1, 0),
 			NWidget(NWID_HORIZONTAL),
-				NWidget(WWT_PANEL, COLOUR_BROWN, WID_STM_SHAREHOLDERS_PANEL), SetMinimalSize(580, 42), SetResize(0, 10), SetScrollbar(WID_STM_SHAREHOLDERS_SCROLLBAR),
+				/* Left column: Shareholders */
+				NWidget(NWID_VERTICAL),
+					NWidget(WWT_TEXT, INVALID_COLOUR), SetStringTip(STR_STOCK_SHAREHOLDERS_HEADER), SetFill(1, 0),
+					NWidget(NWID_HORIZONTAL),
+						NWidget(WWT_PANEL, COLOUR_BROWN, WID_STM_SHAREHOLDERS_PANEL), SetMinimalSize(280, 42), SetResize(0, 10), SetScrollbar(WID_STM_SHAREHOLDERS_SCROLLBAR),
+						EndContainer(),
+						NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_STM_SHAREHOLDERS_SCROLLBAR),
+					EndContainer(),
 				EndContainer(),
-				NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_STM_SHAREHOLDERS_SCROLLBAR),
+				/* Right column: My Investments */
+				NWidget(NWID_VERTICAL),
+					NWidget(WWT_TEXT, INVALID_COLOUR), SetStringTip(STR_STOCK_INVESTMENTS_HEADER), SetFill(1, 0),
+					NWidget(NWID_HORIZONTAL),
+						NWidget(WWT_PANEL, COLOUR_BROWN, WID_STM_INVESTMENTS_PANEL), SetMinimalSize(280, 42), SetResize(0, 10), SetScrollbar(WID_STM_INVESTMENTS_SCROLLBAR),
+						EndContainer(),
+						NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_STM_INVESTMENTS_SCROLLBAR),
+					EndContainer(),
+					NWidget(WWT_PUSHTXTBTN, COLOUR_GREY, WID_STM_SELL_INVESTMENT_BUTTON), SetFill(1, 0), SetStringTip(STR_STOCK_SELL_INVESTMENT, STR_STOCK_SELL_INVESTMENT_TOOLTIP),
+				EndContainer(),
 			EndContainer(),
 		EndContainer(),
 	EndContainer(),

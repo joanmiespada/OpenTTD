@@ -27,6 +27,11 @@ enum StockMarketWidgets : WidgetID {
 	WID_STM_SHAREHOLDERS_PANEL,   ///< Scrollable panel listing shareholders.
 	WID_STM_SHAREHOLDERS_SCROLLBAR, ///< Scrollbar for shareholders list.
 
+	/* My Investments panel */
+	WID_STM_INVESTMENTS_PANEL,      ///< Scrollable panel listing own investments.
+	WID_STM_INVESTMENTS_SCROLLBAR,  ///< Scrollbar for investments list.
+	WID_STM_SELL_INVESTMENT_BUTTON, ///< Button to sell selected investment.
+
 	/* Bottom panel - Stock Market */
 	WID_STM_MARKET_LABEL,         ///< Label for the market section.
 	WID_STM_COMPANY_LIST,         ///< Scrollable list of listed companies.

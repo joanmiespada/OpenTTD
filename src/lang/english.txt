@@ -698,6 +698,16 @@ STR_STOCK_SHAREHOLDERS_HEADER                                   :{BLACK}Sharehol
 STR_STOCK_SHAREHOLDER_LINE                                      :{BLACK}{STRING} - {COMMA} units ({COMMA}%)
 STR_STOCK_NO_SHAREHOLDERS                                       :{BLACK}No shareholders
 
+# My Investments section
+STR_STOCK_INVESTMENTS_HEADER                                    :{BLACK}My Investments
+STR_STOCK_NO_INVESTMENTS                                        :{BLACK}No investments
+STR_STOCK_INVESTMENT_LINE                                       :{BLACK}{STRING} - {COMMA} units ({CURRENCY_LONG}) {STRING}
+STR_STOCK_INVESTMENT_PL_POSITIVE                                :{GREEN}+{CURRENCY_LONG}
+STR_STOCK_INVESTMENT_PL_NEGATIVE                                :{RED}{CURRENCY_LONG}
+STR_STOCK_SELL_INVESTMENT                                       :{BLACK}Sell Investment
+STR_STOCK_SELL_INVESTMENT_TOOLTIP                               :{BLACK}Place sell order for selected investment. Ctrl+Click sells all
+STR_STOCK_SELL_INVESTMENT_QUERY                                 :Enter number of units to sell
+
 # Stock Market section
 STR_STOCK_MARKET_TITLE                                          :{BLACK}Stock Market
 STR_STOCK_MARKET_HEADER_COMPANY                                 :{WHITE}Company
