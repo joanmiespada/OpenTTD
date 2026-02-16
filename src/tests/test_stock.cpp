@@ -1,0 +1,241 @@
+/*
+ * This file is part of OpenTTD.
+ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
+ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
+ */
+
+/** @file test_stock.cpp Unit tests for the stock marketplace data structures. */
+
+#include "../stdafx.h"
+
+#include "../3rdparty/catch2/catch.hpp"
+
+#include "../economy_type.h"
+#include "../stock_type.h"
+
+#include "../safeguards.h"
+
+/** Helper to create a StockHolding with explicit field assignment. */
+static StockHolding MakeHolding(CompanyID owner, uint16_t units, Money price)
+{
+	StockHolding h;
+	h.owner = owner;
+	h.units = units;
+	h.purchase_price = price;
+	return h;
+}
+
+/** Helper to create a StockOrder with common fields. */
+static StockOrder MakeOrder(StockOrderID id, CompanyID seller, CompanyID target, uint16_t units, uint16_t filled = 0, Money ask_price = 100)
+{
+	StockOrder o;
+	o.order_id = id;
+	o.seller = seller;
+	o.target = target;
+	o.units = units;
+	o.units_filled = filled;
+	o.ask_price = ask_price;
+	return o;
+}
+
+TEST_CASE("StockOrder basics")
+{
+	SECTION("GetRemainingUnits - unfilled order") {
+		StockOrder order;
+		order.units = 100;
+		order.units_filled = 0;
+		CHECK(order.GetRemainingUnits() == 100);
+	}
+
+	SECTION("GetRemainingUnits - partially filled") {
+		StockOrder order;
+		order.units = 100;
+		order.units_filled = 40;
+		CHECK(order.GetRemainingUnits() == 60);
+	}
+
+	SECTION("GetRemainingUnits - fully filled") {
+		StockOrder order;
+		order.units = 100;
+		order.units_filled = 100;
+		CHECK(order.GetRemainingUnits() == 0);
+	}
+
+	SECTION("IsFilled - not filled") {
+		StockOrder order;
+		order.units = 100;
+		order.units_filled = 50;
+		CHECK_FALSE(order.IsFilled());
+	}
+
+	SECTION("IsFilled - exactly filled") {
+		StockOrder order;
+		order.units = 100;
+		order.units_filled = 100;
+		CHECK(order.IsFilled());
+	}
+
+	SECTION("IsFilled - zero units") {
+		StockOrder order;
+		order.units = 0;
+		order.units_filled = 0;
+		CHECK(order.IsFilled());
+	}
+}
+
+TEST_CASE("StockOrderBook::FindOrder")
+{
+	StockOrderBook book;
+	CompanyID c0{0};
+
+	SECTION("find existing order") {
+		book.orders.push_back(MakeOrder(42, c0, c0, 10));
+
+		StockOrder *found = book.FindOrder(42);
+		REQUIRE(found != nullptr);
+		CHECK(found->order_id == 42);
+		CHECK(found->units == 10);
+	}
+
+	SECTION("find missing order") {
+		book.orders.push_back(MakeOrder(1, c0, c0, 10));
+		CHECK(book.FindOrder(999) == nullptr);
+	}
+
+	SECTION("empty book") {
+		CHECK(book.FindOrder(0) == nullptr);
+	}
+
+	SECTION("const version") {
+		book.orders.push_back(MakeOrder(7, c0, c0, 10));
+
+		const StockOrderBook &cbook = book;
+		const StockOrder *found = cbook.FindOrder(7);
+		REQUIRE(found != nullptr);
+		CHECK(found->order_id == 7);
+	}
+}
+
+TEST_CASE("StockOrderBook::RemoveFilledOrders")
+{
+	StockOrderBook book;
+	CompanyID c0{0};
+
+	SECTION("removes fully filled, keeps partial") {
+		book.orders.push_back(MakeOrder(1, c0, c0, 10, 10)); /* filled */
+		book.orders.push_back(MakeOrder(2, c0, c0, 10, 5));  /* partial */
+		book.orders.push_back(MakeOrder(3, c0, c0, 10, 0));  /* unfilled */
+
+		book.RemoveFilledOrders();
+
+		CHECK(book.orders.size() == 2);
+		CHECK(book.FindOrder(1) == nullptr);
+		CHECK(book.FindOrder(2) != nullptr);
+		CHECK(book.FindOrder(3) != nullptr);
+	}
+
+	SECTION("empty book is no-op") {
+		book.RemoveFilledOrders();
+		CHECK(book.orders.empty());
+	}
+
+	SECTION("all filled clears book") {
+		for (uint32_t i = 0; i < 3; i++) {
+			book.orders.push_back(MakeOrder(i, c0, c0, 5, 5));
+		}
+
+		book.RemoveFilledOrders();
+		CHECK(book.orders.empty());
+	}
+}
+
+TEST_CASE("StockOrderBook::CountOrdersBySeller")
+{
+	StockOrderBook book;
+	CompanyID seller_a{0};
+	CompanyID seller_b{1};
+	CompanyID seller_c{2};
+
+	SECTION("correct count per seller") {
+		for (uint32_t i = 0; i < 3; i++) {
+			book.orders.push_back(MakeOrder(i, seller_a, seller_a, 10));
+		}
+		for (uint32_t i = 3; i < 5; i++) {
+			book.orders.push_back(MakeOrder(i, seller_b, seller_b, 10));
+		}
+
+		CHECK(book.CountOrdersBySeller(seller_a) == 3);
+		CHECK(book.CountOrdersBySeller(seller_b) == 2);
+	}
+
+	SECTION("zero for unknown seller") {
+		book.orders.push_back(MakeOrder(0, seller_a, seller_a, 10));
+		CHECK(book.CountOrdersBySeller(seller_c) == 0);
+	}
+
+	SECTION("empty book") {
+		CHECK(book.CountOrdersBySeller(seller_a) == 0);
+	}
+}
+
+TEST_CASE("CompanyStockInfo::GetHeldUnits")
+{
+	CompanyStockInfo info;
+
+	SECTION("no holders returns 0") {
+		CHECK(info.GetHeldUnits() == 0);
+	}
+
+	SECTION("single holder") {
+		info.holders.push_back(MakeHolding(CompanyID{0}, 50, 100));
+		CHECK(info.GetHeldUnits() == 50);
+	}
+
+	SECTION("sums multiple holders") {
+		info.holders.push_back(MakeHolding(CompanyID{0}, 30, 100));
+		info.holders.push_back(MakeHolding(CompanyID{1}, 20, 200));
+		info.holders.push_back(MakeHolding(CompanyID{2}, 10, 150));
+		CHECK(info.GetHeldUnits() == 60);
+	}
+}
+
+TEST_CASE("CompanyStockInfo::FindHolder")
+{
+	CompanyStockInfo info;
+	CompanyID owner_a{0};
+	CompanyID owner_b{1};
+	CompanyID owner_c{2};
+
+	info.holders.push_back(MakeHolding(owner_a, 50, 100));
+	info.holders.push_back(MakeHolding(owner_b, 30, 200));
+
+	SECTION("finds existing holder") {
+		StockHolding *h = info.FindHolder(owner_a);
+		REQUIRE(h != nullptr);
+		CHECK(h->owner == owner_a);
+		CHECK(h->units == 50);
+	}
+
+	SECTION("returns nullptr for unknown") {
+		CHECK(info.FindHolder(owner_c) == nullptr);
+	}
+
+	SECTION("const version finds existing") {
+		const CompanyStockInfo &cinfo = info;
+		const StockHolding *h = cinfo.FindHolder(owner_b);
+		REQUIRE(h != nullptr);
+		CHECK(h->owner == owner_b);
+		CHECK(h->units == 30);
+	}
+
+	SECTION("const version returns nullptr for unknown") {
+		const CompanyStockInfo &cinfo = info;
+		CHECK(cinfo.FindHolder(owner_c) == nullptr);
+	}
+
+	SECTION("empty holders") {
+		CompanyStockInfo empty_info;
+		CHECK(empty_info.FindHolder(owner_a) == nullptr);
+	}
+}

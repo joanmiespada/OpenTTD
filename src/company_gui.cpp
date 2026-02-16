@@ -1982,8 +1982,8 @@ struct CompanyWindow : Window
 			reinit |= this->GetWidget<NWidgetStacked>(WID_C_SELECT_GIVE_MONEY)->SetDisplayedPlane((local || _local_company == COMPANY_SPECTATOR || !_settings_game.economy.give_money) ? SZSP_NONE : 0);
 			/* Enable/disable 'Hostile Takeover' button. */
 			reinit |= this->GetWidget<NWidgetStacked>(WID_C_SELECT_HOSTILE_TAKEOVER)->SetDisplayedPlane((local || _local_company == COMPANY_SPECTATOR || !c->is_ai || _networking) ? SZSP_NONE : 0);
-			/* Enable/disable 'Stocks' button. */
-			reinit |= this->GetWidget<NWidgetStacked>(WID_C_SELECT_STOCKS)->SetDisplayedPlane(_settings_game.economy.stock_market ? 0 : SZSP_NONE);
+			/* Enable/disable 'Stocks' button - only show on own company window. */
+			reinit |= this->GetWidget<NWidgetStacked>(WID_C_SELECT_STOCKS)->SetDisplayedPlane((local && _settings_game.economy.stock_market) ? 0 : SZSP_NONE);
 
 			/* Multiplayer buttons. */
 			reinit |= this->GetWidget<NWidgetStacked>(WID_C_SELECT_MULTIPLAYER)->SetDisplayedPlane((!_networking || !NetworkCanJoinCompany(c->index) || _local_company == c->index) ? (int)SZSP_NONE : 0);
