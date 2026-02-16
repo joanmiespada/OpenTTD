@@ -64,6 +64,7 @@
 #include "../timer/timer.h"
 #include "../timer/timer_game_calendar.h"
 #include "../timer/timer_game_economy.h"
+#include "../stock_type.h"
 #include "../timer/timer_game_tick.h"
 #include "../picker_func.h"
 
@@ -3422,6 +3423,31 @@ bool AfterLoadGame()
 	AfterLoadLinkGraphs();
 
 	CheckGroundVehiclesAtCorrectZ();
+
+	/* Migrate old stock market saves: convert available_units to order book sell orders. */
+	if (IsSavegameVersionBefore(SLV_STOCK_ORDER_BOOK) && _settings_game.economy.stock_market) {
+		_stock_order_book.orders.clear();
+		_stock_order_book.next_order_id = 0;
+
+		for (Company *c : Company::Iterate()) {
+			if (!c->stock_info.listed) continue;
+			if (c->stock_info.available_units == 0) continue;
+
+			/* Create a sell order for the available units at current share price. */
+			StockOrder order;
+			order.order_id = _stock_order_book.next_order_id++;
+			order.seller = c->index;
+			order.target = c->index;
+			order.units = c->stock_info.available_units;
+			order.units_filled = 0;
+			order.ask_price = std::max<Money>(c->stock_info.share_price, 1);
+			order.creation_date = TimerGameEconomy::date;
+			_stock_order_book.orders.push_back(order);
+
+			/* Clear available_units since they are now in the order book. */
+			c->stock_info.available_units = 0;
+		}
+	}
 
 	/* Start the scripts. This MUST happen after everything else except
 	 * starting a new company. */

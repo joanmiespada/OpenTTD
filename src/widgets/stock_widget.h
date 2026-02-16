@@ -20,11 +20,9 @@ enum StockMarketWidgets : WidgetID {
 	WID_STM_INFO_SHARE_PRICE,     ///< Label: share price.
 	WID_STM_INFO_TOTAL_ISSUED,    ///< Label: total units issued.
 	WID_STM_INFO_AVAILABLE,       ///< Label: available units.
-	WID_STM_INFO_PREMIUM,         ///< Label: price premium.
 	WID_STM_INFO_LAST_DIVIDEND,   ///< Label: last dividend per unit.
 	WID_STM_INFO_TOTAL_DIVIDENDS, ///< Label: total dividends paid.
 	WID_STM_ISSUE_SHARES,         ///< Button to issue new shares.
-	WID_STM_SET_PREMIUM,          ///< Button to set stock premium.
 	WID_STM_BUYBACK_SHARES,       ///< Button to buy back shares.
 	WID_STM_SHAREHOLDERS_PANEL,   ///< Scrollable panel listing shareholders.
 	WID_STM_SHAREHOLDERS_SCROLLBAR, ///< Scrollbar for shareholders list.

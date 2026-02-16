@@ -362,6 +362,7 @@ public:
 		SLE_CONDARR(CompanyEconomyEntry, delivered_cargo,     SLE_UINT32, 32,           SLV_170, SLV_EXTEND_CARGOTYPES),
 		SLE_CONDARR(CompanyEconomyEntry, delivered_cargo,     SLE_UINT32, NUM_CARGO,    SLV_EXTEND_CARGOTYPES, SL_MAX_VERSION),
 		    SLE_VAR(CompanyEconomyEntry, performance_history, SLE_INT32),
+		SLE_CONDVAR(CompanyEconomyEntry, stock_price,         SLE_INT64, SLV_STOCK_ORDER_BOOK, SL_MAX_VERSION),
 	};
 	static inline const SaveLoadCompatTable compat_description = _company_economy_compat;
 
@@ -508,7 +509,6 @@ public:
 		SLE_VAR(CompanyStockInfo, total_issued,           SLE_UINT16),
 		SLE_VAR(CompanyStockInfo, available_units,        SLE_UINT16),
 		SLE_VAR(CompanyStockInfo, share_price,            SLE_INT64),
-		SLE_VAR(CompanyStockInfo, price_premium,          SLE_INT64),
 		SLE_VAR(CompanyStockInfo, last_dividend_per_unit, SLE_INT64),
 		SLE_VAR(CompanyStockInfo, total_dividends_paid,   SLE_INT64),
 	};

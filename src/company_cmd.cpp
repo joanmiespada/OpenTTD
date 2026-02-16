@@ -982,6 +982,9 @@ CommandCost CmdCompanyCtrl(DoCommandFlags flags, CompanyCtrlAction cca, CompanyI
 
 			/* Clean up stock marketplace data for the bankrupt company. */
 			if (_settings_game.economy.stock_market) {
+				/* Cancel all orders involving this company in the order book. */
+				_stock_order_book.RemoveOrdersForCompany(c->index);
+
 				/* Remove holdings the bankrupt company had in other companies. */
 				for (Company *other : Company::Iterate()) {
 					if (other->index == c->index) continue;
@@ -990,8 +993,6 @@ CommandCost CmdCompanyCtrl(DoCommandFlags flags, CompanyCtrlAction cca, CompanyI
 					StockHolding *held = other->stock_info.FindHolder(c->index);
 					if (held == nullptr || held->units == 0) continue;
 
-					/* Return units to the market */
-					other->stock_info.available_units += held->units;
 					held->units = 0;
 
 					/* Clean up empty holding */

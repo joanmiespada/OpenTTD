@@ -44,7 +44,6 @@ private:
 	enum QueryType {
 		QUERY_NONE,
 		QUERY_ISSUE_SHARES,
-		QUERY_SET_PREMIUM,
 		QUERY_BUYBACK_SHARES,
 		QUERY_BUY_STOCK,
 		QUERY_SELL_STOCK,
@@ -68,6 +67,24 @@ private:
 	static bool StockPriceSorter(const Company * const &a, const Company * const &b)
 	{
 		return b->stock_info.share_price < a->stock_info.share_price;
+	}
+
+	/**
+	 * Find the cheapest sell order for a given target company.
+	 * @param target The company whose stock we want to buy.
+	 * @return Pointer to the cheapest order, or nullptr if none available.
+	 */
+	static const StockOrder *FindCheapestOrder(CompanyID target)
+	{
+		const StockOrder *cheapest = nullptr;
+		for (const auto &order : _stock_order_book.orders) {
+			if (order.target != target) continue;
+			if (order.GetRemainingUnits() == 0) continue;
+			if (cheapest == nullptr || order.ask_price < cheapest->ask_price) {
+				cheapest = &order;
+			}
+		}
+		return cheapest;
 	}
 
 public:
@@ -100,7 +117,6 @@ public:
 
 		/* Disable My Company buttons based on state. */
 		this->SetWidgetDisabledState(WID_STM_ISSUE_SHARES, my == nullptr);
-		this->SetWidgetDisabledState(WID_STM_SET_PREMIUM, !is_listed);
 		this->SetWidgetDisabledState(WID_STM_BUYBACK_SHARES, !is_listed);
 
 		/* Disable buy/sell buttons if no selection in market list. */
@@ -144,12 +160,10 @@ public:
 		DrawString(ir.left, mid - 4, y, GetString(STR_STOCK_INFO_LISTED, si.listed ? STR_STOCK_INFO_LISTED_YES : STR_STOCK_INFO_LISTED_NO));
 		DrawString(ir.left, mid - 4, y + GetCharacterHeight(FS_NORMAL), GetString(STR_STOCK_INFO_SHARE_PRICE, si.share_price));
 		DrawString(ir.left, mid - 4, y + GetCharacterHeight(FS_NORMAL) * 2, GetString(STR_STOCK_INFO_TOTAL_ISSUED, si.total_issued));
-		DrawString(ir.left, mid - 4, y + GetCharacterHeight(FS_NORMAL) * 3, GetString(STR_STOCK_INFO_AVAILABLE, si.available_units));
 
 		/* Right column */
-		DrawString(mid + 4, ir.right, y, GetString(STR_STOCK_INFO_PREMIUM, si.price_premium));
-		DrawString(mid + 4, ir.right, y + GetCharacterHeight(FS_NORMAL), GetString(STR_STOCK_INFO_LAST_DIVIDEND, si.last_dividend_per_unit));
-		DrawString(mid + 4, ir.right, y + GetCharacterHeight(FS_NORMAL) * 2, GetString(STR_STOCK_INFO_TOTAL_DIVIDENDS, si.total_dividends_paid));
+		DrawString(mid + 4, ir.right, y, GetString(STR_STOCK_INFO_LAST_DIVIDEND, si.last_dividend_per_unit));
+		DrawString(mid + 4, ir.right, y + GetCharacterHeight(FS_NORMAL), GetString(STR_STOCK_INFO_TOTAL_DIVIDENDS, si.total_dividends_paid));
 	}
 
 	/** Draw the shareholders scrollable panel. */
@@ -222,9 +236,13 @@ public:
 			DrawString(col_price, col_avail - 10, ir.top + text_y_offset,
 				GetString(STR_JUST_CURRENCY_LONG, c->stock_info.share_price), TC_GOLD);
 
-			/* Available units */
+			/* Available units on order book */
+			uint16_t available_on_book = 0;
+			for (const auto &order : _stock_order_book.orders) {
+				if (order.target == c->index) available_on_book += order.GetRemainingUnits();
+			}
 			DrawString(col_avail, col_hold - 10, ir.top + text_y_offset,
-				GetString(STR_STOCK_MARKET_UNITS_FRACTION, c->stock_info.available_units, c->stock_info.total_issued));
+				GetString(STR_STOCK_MARKET_UNITS_FRACTION, available_on_book, c->stock_info.total_issued));
 
 			/* Your holdings */
 			const StockHolding *holding = c->stock_info.FindHolder(_local_company);
@@ -252,7 +270,7 @@ public:
 			case WID_STM_MY_COMPANY_PANEL:
 				this->icon = GetSpriteSize(SPR_COMPANY_ICON);
 				this->line_height = std::max<int>(this->icon.height + WidgetDimensions::scaled.vsep_normal, GetCharacterHeight(FS_NORMAL) + 2);
-				size.height = GetCharacterHeight(FS_NORMAL) * 4 + WidgetDimensions::scaled.framerect.Vertical();
+				size.height = GetCharacterHeight(FS_NORMAL) * 3 + WidgetDimensions::scaled.framerect.Vertical();
 				break;
 
 			case WID_STM_SHAREHOLDERS_PANEL:
@@ -279,22 +297,11 @@ public:
 					if (my == nullptr) break;
 					uint16_t max_issue = MAX_STOCK_UNITS - my->stock_info.total_issued;
 					if (max_issue > 0) {
-						Command<Commands::ListCompanyStock>::Post(STR_ERROR_STOCK_TOO_MANY_SHARES, max_issue);
+						Command<Commands::ListCompanyStock>::Post(STR_ERROR_STOCK_TOO_MANY_SHARES, max_issue, Money(0));
 					}
 				} else {
 					ShowQueryString({}, STR_STOCK_ISSUE_SHARES_QUERY, 10, this, CS_NUMERAL, {});
 					this->active_query = QUERY_ISSUE_SHARES;
-				}
-				break;
-			}
-
-			case WID_STM_SET_PREMIUM: {
-				if (_ctrl_pressed) {
-					/* Reset premium to zero. */
-					Command<Commands::SetStockPremium>::Post(STR_ERROR_STOCK_PREMIUM_TOO_HIGH, Money(0));
-				} else {
-					ShowQueryString({}, STR_STOCK_SET_PREMIUM_QUERY, 15, this, CS_NUMERAL, {});
-					this->active_query = QUERY_SET_PREMIUM;
 				}
 				break;
 			}
@@ -306,7 +313,7 @@ public:
 				if (_ctrl_pressed) {
 					/* Buy back all held shares. */
 					if (held > 0) {
-						Command<Commands::BuybackStock>::Post(STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK, held);
+						Command<Commands::BuybackStock>::Post(STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK, held, Money(0));
 					}
 				} else {
 					ShowQueryString({}, STR_STOCK_BUYBACK_SHARES_QUERY, 10, this, CS_NUMERAL, {});
@@ -332,10 +339,10 @@ public:
 			case WID_STM_BUY_BUTTON: {
 				if (this->selected_company == CompanyID::Invalid()) break;
 				if (_ctrl_pressed) {
-					/* Buy maximum available. */
-					const Company *target = Company::GetIfValid(this->selected_company);
-					if (target != nullptr && target->stock_info.available_units > 0) {
-						Command<Commands::BuyStock>::Post(STR_ERROR_STOCK_CANNOT_BUY, this->selected_company, target->stock_info.available_units);
+					/* Buy maximum from cheapest order. */
+					const StockOrder *cheapest = FindCheapestOrder(this->selected_company);
+					if (cheapest != nullptr) {
+						Command<Commands::FillSellOrder>::Post(STR_ERROR_STOCK_CANNOT_BUY, cheapest->order_id, cheapest->GetRemainingUnits());
 					}
 				} else {
 					ShowQueryString({}, STR_STOCK_MARKET_BUY_QUERY, 10, this, CS_NUMERAL, {});
@@ -347,12 +354,12 @@ public:
 			case WID_STM_SELL_BUTTON: {
 				if (this->selected_company == CompanyID::Invalid()) break;
 				if (_ctrl_pressed) {
-					/* Sell all holdings. */
+					/* Sell all holdings at current market price. */
 					const Company *target = Company::GetIfValid(this->selected_company);
 					if (target != nullptr) {
 						const StockHolding *holding = target->stock_info.FindHolder(_local_company);
 						if (holding != nullptr && holding->units > 0) {
-							Command<Commands::SellStock>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_company, holding->units);
+							Command<Commands::PlaceSellOrder>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_company, holding->units, target->stock_info.share_price);
 						}
 					}
 				} else {
@@ -375,21 +382,14 @@ public:
 			case QUERY_ISSUE_SHARES: {
 				auto value = ParseInteger<uint64_t>(*str, 10, true);
 				if (!value.has_value() || *value == 0) return;
-				Command<Commands::ListCompanyStock>::Post(STR_ERROR_STOCK_TOO_MANY_SHARES, static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX)));
-				break;
-			}
-
-			case QUERY_SET_PREMIUM: {
-				auto value = ParseInteger<uint64_t>(*str, 10, true);
-				if (!value.has_value()) return;
-				Command<Commands::SetStockPremium>::Post(STR_ERROR_STOCK_PREMIUM_TOO_HIGH, static_cast<Money>(*value));
+				Command<Commands::ListCompanyStock>::Post(STR_ERROR_STOCK_TOO_MANY_SHARES, static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX)), Money(0));
 				break;
 			}
 
 			case QUERY_BUYBACK_SHARES: {
 				auto value = ParseInteger<uint64_t>(*str, 10, true);
 				if (!value.has_value() || *value == 0) return;
-				Command<Commands::BuybackStock>::Post(STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK, static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX)));
+				Command<Commands::BuybackStock>::Post(STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK, static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX)), Money(0));
 				break;
 			}
 
@@ -397,7 +397,12 @@ public:
 				if (this->selected_company == CompanyID::Invalid()) return;
 				auto value = ParseInteger<uint64_t>(*str, 10, true);
 				if (!value.has_value() || *value == 0) return;
-				Command<Commands::BuyStock>::Post(STR_ERROR_STOCK_CANNOT_BUY, this->selected_company, static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX)));
+				/* Buy from cheapest available order. */
+				const StockOrder *cheapest = FindCheapestOrder(this->selected_company);
+				if (cheapest != nullptr) {
+					uint16_t buy_units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
+					Command<Commands::FillSellOrder>::Post(STR_ERROR_STOCK_CANNOT_BUY, cheapest->order_id, buy_units);
+				}
 				break;
 			}
 
@@ -405,7 +410,12 @@ public:
 				if (this->selected_company == CompanyID::Invalid()) return;
 				auto value = ParseInteger<uint64_t>(*str, 10, true);
 				if (!value.has_value() || *value == 0) return;
-				Command<Commands::SellStock>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_company, static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX)));
+				/* Place a sell order at current market price. */
+				const Company *target = Company::GetIfValid(this->selected_company);
+				if (target != nullptr) {
+					uint16_t sell_units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
+					Command<Commands::PlaceSellOrder>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_company, sell_units, target->stock_info.share_price);
+				}
 				break;
 			}
 
@@ -440,11 +450,10 @@ static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets
 	NWidget(WWT_PANEL, COLOUR_BROWN),
 		NWidget(NWID_VERTICAL), SetPadding(WidgetDimensions::unscaled.framerect),
 			NWidget(WWT_TEXT, INVALID_COLOUR), SetStringTip(STR_STOCK_MY_COMPANY_TITLE), SetFill(1, 0),
-			NWidget(WWT_PANEL, COLOUR_BROWN, WID_STM_MY_COMPANY_PANEL), SetMinimalSize(600, 60), SetFill(1, 0),
+			NWidget(WWT_PANEL, COLOUR_BROWN, WID_STM_MY_COMPANY_PANEL), SetMinimalSize(600, 48), SetFill(1, 0),
 			EndContainer(),
 			NWidget(NWID_HORIZONTAL, NWidContainerFlag::EqualSize), SetPIP(0, WidgetDimensions::unscaled.hsep_normal, 0),
 				NWidget(WWT_PUSHTXTBTN, COLOUR_GREY, WID_STM_ISSUE_SHARES), SetFill(1, 0), SetStringTip(STR_STOCK_ISSUE_SHARES, STR_STOCK_ISSUE_SHARES_TOOLTIP),
-				NWidget(WWT_PUSHTXTBTN, COLOUR_GREY, WID_STM_SET_PREMIUM), SetFill(1, 0), SetStringTip(STR_STOCK_SET_PREMIUM, STR_STOCK_SET_PREMIUM_TOOLTIP),
 				NWidget(WWT_PUSHTXTBTN, COLOUR_GREY, WID_STM_BUYBACK_SHARES), SetFill(1, 0), SetStringTip(STR_STOCK_BUYBACK_SHARES, STR_STOCK_BUYBACK_SHARES_TOOLTIP),
 			EndContainer(),
 			NWidget(WWT_TEXT, INVALID_COLOUR), SetStringTip(STR_STOCK_SHAREHOLDERS_HEADER), SetFill(1, 0),

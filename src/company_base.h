@@ -28,6 +28,7 @@ struct CompanyEconomyEntry {
 	CargoArray delivered_cargo{}; ///< The amount of delivered cargo.
 	int32_t performance_history = 0; ///< Company score (scale 0-1000)
 	Money company_value = 0; ///< The value of the company.
+	Money stock_price = 0; ///< Stock share price at end of this quarter.
 };
 
 struct CompanyInfrastructure {

@@ -686,15 +686,11 @@ STR_STOCK_INFO_LISTED_NO                                        :{RED}No
 STR_STOCK_INFO_SHARE_PRICE                                      :{BLACK}Share Price: {CURRENCY_LONG}
 STR_STOCK_INFO_TOTAL_ISSUED                                     :{BLACK}Total Issued: {COMMA} units
 STR_STOCK_INFO_AVAILABLE                                        :{BLACK}Available: {COMMA} units
-STR_STOCK_INFO_PREMIUM                                          :{BLACK}Premium: {CURRENCY_LONG}
 STR_STOCK_INFO_LAST_DIVIDEND                                    :{BLACK}Last Dividend: {CURRENCY_LONG} / unit
 STR_STOCK_INFO_TOTAL_DIVIDENDS                                  :{BLACK}Total Dividends Paid: {CURRENCY_LONG}
 STR_STOCK_ISSUE_SHARES                                          :{BLACK}Issue Shares
 STR_STOCK_ISSUE_SHARES_TOOLTIP                                  :{BLACK}Issue new shares on the market. Ctrl+Click to issue maximum
 STR_STOCK_ISSUE_SHARES_QUERY                                    :Enter the number of share units to issue
-STR_STOCK_SET_PREMIUM                                           :{BLACK}Set Premium
-STR_STOCK_SET_PREMIUM_TOOLTIP                                   :{BLACK}Set a premium on top of the base share price. Ctrl+Click to reset to zero
-STR_STOCK_SET_PREMIUM_QUERY                                     :Enter the stock premium amount
 STR_STOCK_BUYBACK_SHARES                                        :{BLACK}Buyback Shares
 STR_STOCK_BUYBACK_SHARES_TOOLTIP                                :{BLACK}Buy back shares from the market. Ctrl+Click to buy back all available
 STR_STOCK_BUYBACK_SHARES_QUERY                                  :Enter the number of share units to buy back
@@ -727,7 +723,11 @@ STR_ERROR_STOCK_CANNOT_BUY                                      :{WHITE}Cannot b
 STR_ERROR_STOCK_CANNOT_SELL                                     :{WHITE}Cannot sell stock...
 STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK                           :{WHITE}Not enough shares outstanding to buy back
 STR_ERROR_STOCK_COMPANY_CANNOT_AFFORD                           :{WHITE}The issuing company cannot afford to buy back shares
-STR_ERROR_STOCK_PREMIUM_TOO_HIGH                                :{WHITE}Stock premium is too high
+STR_ERROR_STOCK_ORDER_NOT_FOUND                                 :{WHITE}Order not found
+STR_ERROR_STOCK_TOO_MANY_ORDERS                                 :{WHITE}Too many active orders
+STR_ERROR_STOCK_NOT_YOUR_ORDER                                  :{WHITE}This is not your order
+STR_ERROR_STOCK_CANNOT_PLACE_ORDER                              :{WHITE}Cannot place sell order for your own company's stock
+STR_ERROR_STOCK_CANNOT_FILL_ORDER                               :{WHITE}Cannot fill your own sell order
 
 # Performance detail window
 STR_PERFORMANCE_DETAIL                                          :{WHITE}Detailed Performance Rating

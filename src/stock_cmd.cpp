@@ -25,6 +25,90 @@
 
 #include "safeguards.h"
 
+/** Global stock order book instance. */
+StockOrderBook _stock_order_book;
+
+/**
+ * Find an order by its ID.
+ * @param id The order ID to find.
+ * @return Pointer to the order, or nullptr if not found.
+ */
+StockOrder *StockOrderBook::FindOrder(StockOrderID id)
+{
+	for (auto &order : this->orders) {
+		if (order.order_id == id) return &order;
+	}
+	return nullptr;
+}
+
+/**
+ * Find an order by its ID (const version).
+ * @param id The order ID to find.
+ * @return Pointer to the order, or nullptr if not found.
+ */
+const StockOrder *StockOrderBook::FindOrder(StockOrderID id) const
+{
+	for (const auto &order : this->orders) {
+		if (order.order_id == id) return &order;
+	}
+	return nullptr;
+}
+
+/**
+ * Remove all fully filled orders from the order book.
+ */
+void StockOrderBook::RemoveFilledOrders()
+{
+	this->orders.erase(
+		std::remove_if(this->orders.begin(), this->orders.end(),
+			[](const StockOrder &o) { return o.IsFilled(); }),
+		this->orders.end());
+}
+
+/**
+ * Count the number of active orders placed by a specific seller.
+ * @param seller The company to count orders for.
+ * @return Number of active orders by this seller.
+ */
+uint16_t StockOrderBook::CountOrdersBySeller(CompanyID seller) const
+{
+	uint16_t count = 0;
+	for (const auto &order : this->orders) {
+		if (order.seller == seller) count++;
+	}
+	return count;
+}
+
+/**
+ * Remove all orders involving a specific company (as seller or target).
+ * Returns escrowed units to sellers when removing orders where the company is the target.
+ * @param company The company being removed.
+ */
+void StockOrderBook::RemoveOrdersForCompany(CompanyID company)
+{
+	/* First pass: return escrowed units for orders where removed company is NOT the seller. */
+	for (auto &order : this->orders) {
+		if (order.seller == company) continue;
+		if (order.target != company) continue;
+
+		/* This order sells shares of the removed company - return unsold units to seller's holdings. */
+		uint16_t remaining = order.GetRemainingUnits();
+		if (remaining > 0) {
+			Company *seller_company = Company::GetIfValid(order.seller);
+			if (seller_company != nullptr) {
+				/* The target company is being removed, so these holdings are worthless.
+				 * Just cancel the order; the shares disappear with the company. */
+			}
+		}
+	}
+
+	/* Remove all orders where this company is seller or target. */
+	this->orders.erase(
+		std::remove_if(this->orders.begin(), this->orders.end(),
+			[company](const StockOrder &o) { return o.seller == company || o.target == company; }),
+		this->orders.end());
+}
+
 /**
  * Calculate the base value for stock pricing based on 12-month company metrics.
  * @param c The company to evaluate.
@@ -53,27 +137,21 @@ Money CalculateStockBaseValue(const Company *c)
 }
 
 /**
- * Calculate the current share price for a listed company.
+ * Calculate a formula-based share price for a listed company.
+ * Used as reference price for IPO and price decay.
  * @param c The company.
- * @return The price per stock unit.
+ * @return The formula price per stock unit.
  */
-static Money CalculateSharePrice(const Company *c)
+static Money CalculateFormulaPrice(const Company *c)
 {
 	Money base = CalculateStockBaseValue(c);
-
-	/* Price per unit = base_value * max_issue_percent / 10000 (to get per-unit price) */
 	Money price_per_unit = base * _settings_game.economy.stock_max_issue_percent / 10000;
-
-	/* Add premium spread across total issued units */
-	if (c->stock_info.total_issued > 0) {
-		price_per_unit += c->stock_info.price_premium / c->stock_info.total_issued;
-	}
-
 	return std::max<Money>(price_per_unit, 1);
 }
 
 /**
  * Update stock prices for all listed companies. Called quarterly.
+ * If no trades happened, gently decay toward formula price.
  */
 void UpdateStockPrices()
 {
@@ -81,7 +159,15 @@ void UpdateStockPrices()
 
 	for (Company *c : Company::Iterate()) {
 		if (!c->stock_info.listed) continue;
-		c->stock_info.share_price = CalculateSharePrice(c);
+
+		Money formula_price = CalculateFormulaPrice(c);
+
+		/* Decay toward formula price: weighted average (75% current, 25% formula). */
+		c->stock_info.share_price = (c->stock_info.share_price * 3 + formula_price) / 4;
+		c->stock_info.share_price = std::max<Money>(c->stock_info.share_price, 1);
+
+		/* Record stock price in current economy entry. */
+		c->cur_economy.stock_price = c->stock_info.share_price;
 	}
 
 	InvalidateWindowClassesData(WC_STOCK_MARKET);
@@ -150,12 +236,13 @@ void PayAnnualDividends()
 }
 
 /**
- * Issue stock on the marketplace.
+ * Issue stock on the marketplace (IPO). Creates sell orders in the order book.
  * @param flags DoCommandFlags.
  * @param units_to_issue Number of stock units to issue (each = 0.01% of company).
+ * @param ipo_price Price per unit for the IPO. If 0, uses formula price.
  * @return The cost of this operation or an error.
  */
-CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue)
+CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue, Money ipo_price)
 {
 	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
 
@@ -170,62 +257,207 @@ CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue)
 		return CommandCost(STR_ERROR_STOCK_TOO_MANY_SHARES);
 	}
 
-	Money price_per_unit = CalculateSharePrice(c);
-	Money proceeds = price_per_unit * units_to_issue;
+	/* Check total order limit */
+	if (_stock_order_book.orders.size() >= MAX_TOTAL_STOCK_ORDERS) {
+		return CommandCost(STR_ERROR_STOCK_TOO_MANY_ORDERS);
+	}
+
+	/* Determine IPO price */
+	Money price_per_unit = ipo_price;
+	if (price_per_unit <= 0) {
+		price_per_unit = CalculateFormulaPrice(c);
+	}
 
 	if (flags.Test(DoCommandFlag::Execute)) {
 		c->stock_info.listed = true;
 		c->stock_info.total_issued += units_to_issue;
-		c->stock_info.available_units += units_to_issue;
 		c->stock_info.share_price = price_per_unit;
+
+		/* Create a sell order in the order book with the company as seller. */
+		StockOrder order;
+		order.order_id = _stock_order_book.next_order_id++;
+		order.seller = _current_company;
+		order.target = _current_company;
+		order.units = units_to_issue;
+		order.units_filled = 0;
+		order.ask_price = price_per_unit;
+		order.creation_date = TimerGameEconomy::date;
+		_stock_order_book.orders.push_back(order);
 
 		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
 
-	/* Negative cost = company receives the proceeds */
-	return CommandCost(EXPENSES_STOCK_REVENUE, -proceeds);
+	return CommandCost();
 }
 
 /**
- * Buy stock from another company.
+ * Place a sell order on the stock market order book.
  * @param flags DoCommandFlags.
- * @param target Target company to buy stock from.
- * @param units Number of units to buy.
+ * @param target Company whose stock is being sold.
+ * @param units Number of units to sell.
+ * @param ask_price Price per unit requested.
  * @return The cost of this operation or an error.
  */
-CommandCost CmdBuyStock(DoCommandFlags flags, CompanyID target, uint16_t units)
+CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t units, Money ask_price)
 {
 	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
 
 	Company *target_company = Company::GetIfValid(target);
 	if (target_company == nullptr) return CMD_ERROR;
 
-	if (target == _current_company) return CommandCost(STR_ERROR_STOCK_CANNOT_BUY_OWN);
-
 	if (!target_company->stock_info.listed) return CommandCost(STR_ERROR_STOCK_NOT_LISTED);
 	if (units == 0) return CMD_ERROR;
-	if (target_company->stock_info.available_units < units) return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_AVAILABLE);
+	if (ask_price <= 0) return CMD_ERROR;
+	if (_current_company == target) return CommandCost(STR_ERROR_STOCK_CANNOT_PLACE_ORDER);
 
-	Money cost = target_company->stock_info.share_price * units;
-	CommandCost ret(EXPENSES_OTHER, cost);
+	/* Check seller holds enough units */
+	StockHolding *holding = target_company->stock_info.FindHolder(_current_company);
+	if (holding == nullptr || holding->units < units) return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_HOLDINGS);
+
+	/* Check order limits */
+	if (_stock_order_book.CountOrdersBySeller(_current_company) >= MAX_STOCK_ORDERS_PER_COMPANY) {
+		return CommandCost(STR_ERROR_STOCK_TOO_MANY_ORDERS);
+	}
+	if (_stock_order_book.orders.size() >= MAX_TOTAL_STOCK_ORDERS) {
+		return CommandCost(STR_ERROR_STOCK_TOO_MANY_ORDERS);
+	}
 
 	if (flags.Test(DoCommandFlag::Execute)) {
-		/* Add or update holding */
-		StockHolding *holding = target_company->stock_info.FindHolder(_current_company);
-		if (holding != nullptr) {
-			/* Update average purchase price */
-			Money total_cost = holding->purchase_price * holding->units + cost;
-			holding->units += units;
-			holding->purchase_price = total_cost / holding->units;
-		} else {
-			target_company->stock_info.holders.push_back({_current_company, units, target_company->stock_info.share_price});
+		/* Escrow: deduct units from seller's holding. */
+		holding->units -= units;
+		if (holding->units == 0) {
+			auto &holders = target_company->stock_info.holders;
+			holders.erase(std::remove_if(holders.begin(), holders.end(),
+				[](const StockHolding &h) { return h.units == 0; }), holders.end());
 		}
 
-		target_company->stock_info.available_units -= units;
+		/* Create the sell order. */
+		StockOrder order;
+		order.order_id = _stock_order_book.next_order_id++;
+		order.seller = _current_company;
+		order.target = target;
+		order.units = units;
+		order.units_filled = 0;
+		order.ask_price = ask_price;
+		order.creation_date = TimerGameEconomy::date;
+		_stock_order_book.orders.push_back(order);
 
-		/* Target company receives the money */
-		target_company->money += cost;
-		target_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += cost;
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
+	}
+
+	return CommandCost();
+}
+
+/**
+ * Cancel an existing sell order.
+ * @param flags DoCommandFlags.
+ * @param order_id The ID of the order to cancel.
+ * @return The cost of this operation or an error.
+ */
+CommandCost CmdCancelSellOrder(DoCommandFlags flags, StockOrderID order_id)
+{
+	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
+
+	StockOrder *order = _stock_order_book.FindOrder(order_id);
+	if (order == nullptr) return CommandCost(STR_ERROR_STOCK_ORDER_NOT_FOUND);
+
+	if (order->seller != _current_company) return CommandCost(STR_ERROR_STOCK_NOT_YOUR_ORDER);
+
+	if (flags.Test(DoCommandFlag::Execute)) {
+		uint16_t remaining = order->GetRemainingUnits();
+
+		if (remaining > 0) {
+			/* Return escrowed units to seller's holding in the target company. */
+			Company *target_company = Company::GetIfValid(order->target);
+			if (target_company != nullptr) {
+				/* For IPO orders (seller == target), units go back to unissued.
+				 * For regular sell orders, units go back to seller's holdings. */
+				if (order->seller == order->target) {
+					/* IPO cancel: reduce total issued. */
+					target_company->stock_info.total_issued -= remaining;
+					if (target_company->stock_info.total_issued == 0) {
+						target_company->stock_info.listed = false;
+					}
+				} else {
+					StockHolding *holding = target_company->stock_info.FindHolder(order->seller);
+					if (holding != nullptr) {
+						holding->units += remaining;
+					} else {
+						target_company->stock_info.holders.push_back({order->seller, remaining, order->ask_price});
+					}
+				}
+			}
+		}
+
+		/* Remove the order. */
+		auto &orders = _stock_order_book.orders;
+		orders.erase(std::remove_if(orders.begin(), orders.end(),
+			[order_id](const StockOrder &o) { return o.order_id == order_id; }), orders.end());
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
+	}
+
+	return CommandCost();
+}
+
+/**
+ * Fill (buy from) a sell order on the order book.
+ * @param flags DoCommandFlags.
+ * @param order_id The ID of the sell order to buy from.
+ * @param units Number of units to buy.
+ * @return The cost of this operation or an error.
+ */
+CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16_t units)
+{
+	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
+
+	if (units == 0) return CMD_ERROR;
+
+	StockOrder *order = _stock_order_book.FindOrder(order_id);
+	if (order == nullptr) return CommandCost(STR_ERROR_STOCK_ORDER_NOT_FOUND);
+
+	if (order->seller == _current_company) return CommandCost(STR_ERROR_STOCK_CANNOT_FILL_ORDER);
+
+	Company *target_company = Company::GetIfValid(order->target);
+	if (target_company == nullptr) return CMD_ERROR;
+
+	/* Buyer cannot buy stock of their own company. */
+	if (order->target == _current_company) return CommandCost(STR_ERROR_STOCK_CANNOT_BUY_OWN);
+
+	uint16_t remaining = order->GetRemainingUnits();
+	if (units > remaining) return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_AVAILABLE);
+
+	Money total_cost = order->ask_price * units;
+	CommandCost ret(EXPENSES_OTHER, total_cost);
+
+	if (flags.Test(DoCommandFlag::Execute)) {
+		/* Transfer money: buyer pays, seller receives. */
+		Company *seller_company = Company::GetIfValid(order->seller);
+		if (seller_company != nullptr) {
+			seller_company->money += total_cost;
+			seller_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += total_cost;
+		}
+
+		/* Create or update buyer's holding. */
+		StockHolding *buyer_holding = target_company->stock_info.FindHolder(_current_company);
+		if (buyer_holding != nullptr) {
+			Money old_total = buyer_holding->purchase_price * buyer_holding->units;
+			buyer_holding->units += units;
+			buyer_holding->purchase_price = (old_total + total_cost) / buyer_holding->units;
+		} else {
+			target_company->stock_info.holders.push_back({_current_company, units, order->ask_price});
+		}
+
+		/* Update order fill status. */
+		order->units_filled += units;
+
+		/* Price discovery: update share price to last trade price. */
+		target_company->stock_info.share_price = order->ask_price;
+
+		/* Remove fully filled orders. */
+		if (order->IsFilled()) {
+			_stock_order_book.RemoveFilledOrders();
+		}
 
 		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
@@ -234,144 +466,125 @@ CommandCost CmdBuyStock(DoCommandFlags flags, CompanyID target, uint16_t units)
 }
 
 /**
- * Sell stock back to the market.
+ * Buy back the company's own stock from the order book and holders.
  * @param flags DoCommandFlags.
- * @param target Target company whose stock to sell.
- * @param units Number of units to sell.
+ * @param units Number of units to buy back.
+ * @param max_price Maximum price per unit willing to pay (0 = any price).
  * @return The cost of this operation or an error.
  */
-CommandCost CmdSellStock(DoCommandFlags flags, CompanyID target, uint16_t units)
+CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_price)
 {
 	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
 
-	Company *target_company = Company::GetIfValid(target);
-	if (target_company == nullptr) return CMD_ERROR;
+	Company *c = Company::GetIfValid(_current_company);
+	if (c == nullptr) return CMD_ERROR;
 
-	if (!target_company->stock_info.listed) return CommandCost(STR_ERROR_STOCK_NOT_LISTED);
+	if (!c->stock_info.listed) return CommandCost(STR_ERROR_STOCK_NOT_LISTED);
 	if (units == 0) return CMD_ERROR;
 
-	StockHolding *holding = target_company->stock_info.FindHolder(_current_company);
-	if (holding == nullptr || holding->units < units) return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_HOLDINGS);
+	/* Count available units: from order book (targeting our company) + from holders. */
+	uint16_t order_book_units = 0;
+	for (const auto &order : _stock_order_book.orders) {
+		if (order.target != _current_company) continue;
+		if (max_price > 0 && order.ask_price > max_price) continue;
+		order_book_units += order.GetRemainingUnits();
+	}
 
-	/* Seller receives current market price, target company pays */
-	Money revenue = target_company->stock_info.share_price * units;
+	uint16_t held_units = c->stock_info.GetHeldUnits();
+	uint16_t total_available = order_book_units + held_units;
 
-	/* Check target company can afford to buy back */
-	if (target_company->money < revenue) return CommandCost(STR_ERROR_STOCK_COMPANY_CANNOT_AFFORD);
+	if (units > total_available) {
+		return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK);
+	}
+
+	/* Calculate total cost: buy cheapest orders first, then from holders at current share price. */
+	Money total_cost = 0;
+	uint16_t remaining_to_buy = units;
+
+	/* Sort orders by price (cheapest first) for cost calculation. */
+	std::vector<std::pair<StockOrderID, Money>> eligible_orders;
+	for (const auto &order : _stock_order_book.orders) {
+		if (order.target != _current_company) continue;
+		if (max_price > 0 && order.ask_price > max_price) continue;
+		eligible_orders.push_back({order.order_id, order.ask_price});
+	}
+	std::sort(eligible_orders.begin(), eligible_orders.end(),
+		[](const auto &a, const auto &b) { return a.second < b.second; });
+
+	/* Calculate cost from order book. */
+	for (const auto &[oid, price] : eligible_orders) {
+		if (remaining_to_buy == 0) break;
+		const StockOrder *order = _stock_order_book.FindOrder(oid);
+		if (order == nullptr) continue;
+		uint16_t take = std::min(remaining_to_buy, order->GetRemainingUnits());
+		total_cost += price * take;
+		remaining_to_buy -= take;
+	}
+
+	/* Remaining from holders at current share price. */
+	if (remaining_to_buy > 0) {
+		total_cost += c->stock_info.share_price * remaining_to_buy;
+	}
+
+	CommandCost ret(EXPENSES_OTHER, total_cost);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
-		holding->units -= units;
-		if (holding->units == 0) {
-			/* Remove empty holding */
-			auto &holders = target_company->stock_info.holders;
+		remaining_to_buy = units;
+
+		/* Buy from order book first (cheapest orders). */
+		for (const auto &[oid, price] : eligible_orders) {
+			if (remaining_to_buy == 0) break;
+			StockOrder *order = _stock_order_book.FindOrder(oid);
+			if (order == nullptr) continue;
+
+			uint16_t take = std::min(remaining_to_buy, order->GetRemainingUnits());
+			Money payment = price * take;
+
+			/* Pay the seller. */
+			Company *seller = Company::GetIfValid(order->seller);
+			if (seller != nullptr) {
+				seller->money += payment;
+				seller->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
+			}
+
+			order->units_filled += take;
+			remaining_to_buy -= take;
+
+			/* Price discovery: update share price. */
+			c->stock_info.share_price = price;
+		}
+
+		/* Clean up filled orders. */
+		_stock_order_book.RemoveFilledOrders();
+
+		/* Buy back from holders at current share price. */
+		if (remaining_to_buy > 0) {
+			for (auto &holder : c->stock_info.holders) {
+				if (remaining_to_buy == 0) break;
+
+				uint16_t take = std::min(holder.units, remaining_to_buy);
+				holder.units -= take;
+				remaining_to_buy -= take;
+
+				/* Pay the holder. */
+				Company *holder_company = Company::GetIfValid(holder.owner);
+				if (holder_company != nullptr) {
+					Money payment = c->stock_info.share_price * take;
+					holder_company->money += payment;
+					holder_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
+				}
+			}
+
+			/* Clean up empty holdings. */
+			auto &holders = c->stock_info.holders;
 			holders.erase(std::remove_if(holders.begin(), holders.end(),
 				[](const StockHolding &h) { return h.units == 0; }), holders.end());
 		}
 
-		target_company->stock_info.available_units += units;
-
-		/* Debit the target company */
-		target_company->money -= revenue;
-		target_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] -= revenue;
-
-		/* Credit the seller */
-		Company *seller = Company::GetIfValid(_current_company);
-		if (seller != nullptr) {
-			seller->money += revenue;
-			seller->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += revenue;
-		}
-
-		InvalidateWindowClassesData(WC_STOCK_MARKET);
-	}
-
-	return CommandCost();
-}
-
-/**
- * Set the premium on the company's stock price.
- * @param flags DoCommandFlags.
- * @param premium The premium amount to add on top of base valuation.
- * @return The cost of this operation or an error.
- */
-CommandCost CmdSetStockPremium(DoCommandFlags flags, Money premium)
-{
-	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
-
-	Company *c = Company::GetIfValid(_current_company);
-	if (c == nullptr) return CMD_ERROR;
-
-	if (!c->stock_info.listed) return CommandCost(STR_ERROR_STOCK_NOT_LISTED);
-	if (premium < 0) return CMD_ERROR;
-	if (premium > MAX_STOCK_PREMIUM) return CommandCost(STR_ERROR_STOCK_PREMIUM_TOO_HIGH);
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		c->stock_info.price_premium = premium;
-		c->stock_info.share_price = CalculateSharePrice(c);
-
-		InvalidateWindowClassesData(WC_STOCK_MARKET);
-	}
-
-	return CommandCost();
-}
-
-/**
- * Buy back the company's own stock from holders.
- * @param flags DoCommandFlags.
- * @param units Number of units to buy back.
- * @return The cost of this operation or an error.
- */
-CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units)
-{
-	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
-
-	Company *c = Company::GetIfValid(_current_company);
-	if (c == nullptr) return CMD_ERROR;
-
-	if (!c->stock_info.listed) return CommandCost(STR_ERROR_STOCK_NOT_LISTED);
-	if (units == 0) return CMD_ERROR;
-
-	uint16_t held_units = c->stock_info.GetHeldUnits();
-	uint16_t buyback_from_holders = std::min<uint16_t>(units, held_units);
-	uint16_t buyback_from_market = units - buyback_from_holders;
-
-	if (buyback_from_market > c->stock_info.available_units) {
-		return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK);
-	}
-
-	Money cost = c->stock_info.share_price * units;
-	CommandCost ret(EXPENSES_OTHER, cost);
-
-	if (flags.Test(DoCommandFlag::Execute)) {
-		/* Buy back from holders sequentially */
-		uint16_t remaining = buyback_from_holders;
-		for (auto &holder : c->stock_info.holders) {
-			if (remaining == 0) break;
-
-			uint16_t take = std::min(holder.units, remaining);
-			holder.units -= take;
-			remaining -= take;
-
-			/* Pay the holder */
-			Company *holder_company = Company::GetIfValid(holder.owner);
-			if (holder_company != nullptr) {
-				Money payment = c->stock_info.share_price * take;
-				holder_company->money += payment;
-				holder_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
-			}
-		}
-
-		/* Clean up empty holdings */
-		auto &holders = c->stock_info.holders;
-		holders.erase(std::remove_if(holders.begin(), holders.end(),
-			[](const StockHolding &h) { return h.units == 0; }), holders.end());
-
-		/* Remove from available market units */
-		c->stock_info.available_units -= buyback_from_market;
-
-		/* Reduce total issued */
+		/* Reduce total issued. */
 		c->stock_info.total_issued -= units;
 
-		/* If no stock remains, delist */
+		/* If no stock remains, delist. */
 		if (c->stock_info.total_issued == 0) {
 			c->stock_info.listed = false;
 		}

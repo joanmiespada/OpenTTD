@@ -12,17 +12,18 @@
 
 #include "command_type.h"
 #include "company_type.h"
+#include "stock_type.h"
 
-CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue);
-CommandCost CmdBuyStock(DoCommandFlags flags, CompanyID target, uint16_t units);
-CommandCost CmdSellStock(DoCommandFlags flags, CompanyID target, uint16_t units);
-CommandCost CmdSetStockPremium(DoCommandFlags flags, Money premium);
-CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units);
+CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue, Money ipo_price);
+CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t units, Money ask_price);
+CommandCost CmdCancelSellOrder(DoCommandFlags flags, StockOrderID order_id);
+CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16_t units);
+CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_price);
 
 DEF_CMD_TRAIT(Commands::ListCompanyStock, CmdListCompanyStock, {}, CommandType::MoneyManagement)
-DEF_CMD_TRAIT(Commands::BuyStock,         CmdBuyStock,         {}, CommandType::MoneyManagement)
-DEF_CMD_TRAIT(Commands::SellStock,        CmdSellStock,        {}, CommandType::MoneyManagement)
-DEF_CMD_TRAIT(Commands::SetStockPremium,  CmdSetStockPremium,  {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::PlaceSellOrder,   CmdPlaceSellOrder,   {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::CancelSellOrder,  CmdCancelSellOrder,  {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::FillSellOrder,    CmdFillSellOrder,    {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::BuybackStock,     CmdBuybackStock,     {}, CommandType::MoneyManagement)
 
 Money CalculateStockBaseValue(const struct Company *c);
