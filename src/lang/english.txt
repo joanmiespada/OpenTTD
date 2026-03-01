@@ -738,6 +738,7 @@ STR_ERROR_STOCK_TOO_MANY_ORDERS                                 :{WHITE}Too many
 STR_ERROR_STOCK_NOT_YOUR_ORDER                                  :{WHITE}This is not your order
 STR_ERROR_STOCK_CANNOT_PLACE_ORDER                              :{WHITE}Cannot place sell order for your own company's stock
 STR_ERROR_STOCK_CANNOT_FILL_ORDER                               :{WHITE}Cannot fill your own sell order
+STR_ERROR_STOCK_IPO_PRICE_TOO_HIGH                              :{WHITE}IPO price too high... maximum is twice the formula valuation
 
 # Performance detail window
 STR_PERFORMANCE_DETAIL                                          :{WHITE}Detailed Performance Rating
@@ -4044,7 +4045,7 @@ STR_FINANCES_CAPITAL_EXPENSES_TITLE                             :{WHITE}Capital 
 STR_FINANCES_STOCK_TITLE                                        :{WHITE}Stock Market
 
 
-###length 15
+###length 16
 STR_FINANCES_SECTION_CONSTRUCTION                               :{GOLD}Construction
 STR_FINANCES_SECTION_NEW_VEHICLES                               :{GOLD}New Vehicles
 STR_FINANCES_SECTION_TRAIN_RUNNING_COSTS                        :{GOLD}Trains
@@ -4059,6 +4060,7 @@ STR_FINANCES_SECTION_SHIP_REVENUE                               :{GOLD}Ships
 STR_FINANCES_SECTION_LOAN_INTEREST                              :{GOLD}Loan Interest
 STR_FINANCES_SECTION_OTHER                                      :{GOLD}Other
 STR_FINANCES_SECTION_STOCK_REVENUE                              :{GOLD}Stock Revenue
+STR_FINANCES_SECTION_STOCK_PURCHASE                             :{GOLD}Stock Purchases
 STR_FINANCES_SECTION_DIVIDENDS                                  :{GOLD}Dividends
 
 STR_FINANCES_TOTAL_CAPTION                                      :{WHITE}Total

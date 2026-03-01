@@ -81,28 +81,12 @@ uint16_t StockOrderBook::CountOrdersBySeller(CompanyID seller) const
 
 /**
  * Remove all orders involving a specific company (as seller or target).
- * Returns escrowed units to sellers when removing orders where the company is the target.
+ * When the removed company is the target, escrowed shares are worthless and simply discarded.
+ * When the removed company is the seller, their orders are removed.
  * @param company The company being removed.
  */
 void StockOrderBook::RemoveOrdersForCompany(CompanyID company)
 {
-	/* First pass: return escrowed units for orders where removed company is NOT the seller. */
-	for (auto &order : this->orders) {
-		if (order.seller == company) continue;
-		if (order.target != company) continue;
-
-		/* This order sells shares of the removed company - return unsold units to seller's holdings. */
-		uint16_t remaining = order.GetRemainingUnits();
-		if (remaining > 0) {
-			Company *seller_company = Company::GetIfValid(order.seller);
-			if (seller_company != nullptr) {
-				/* The target company is being removed, so these holdings are worthless.
-				 * Just cancel the order; the shares disappear with the company. */
-			}
-		}
-	}
-
-	/* Remove all orders where this company is seller or target. */
 	this->orders.erase(
 		std::remove_if(this->orders.begin(), this->orders.end(),
 			[company](const StockOrder &o) { return o.seller == company || o.target == company; }),
@@ -201,14 +185,23 @@ void PayAnnualDividends()
 		/* Dividend pool = net profit * dividend rate / 100 */
 		Money dividend_pool = total_profit * _settings_game.economy.stock_dividend_rate / 100;
 
-		/* Distribute proportionally to all holders */
+		/* Count all outstanding units: held by investors + escrowed in sell orders (excl. IPO orders).
+		 * IPO orders (seller == target) represent unsold newly issued stock; they don't earn dividends. */
 		uint16_t held_units = c->stock_info.GetHeldUnits();
-		if (held_units == 0) {
+		uint16_t escrowed_units = 0;
+		for (const auto &order : _stock_order_book.orders) {
+			if (order.target != c->index) continue;
+			if (order.seller == order.target) continue; /* Skip IPO orders. */
+			escrowed_units += order.GetRemainingUnits();
+		}
+		uint16_t total_dividend_units = held_units + escrowed_units;
+
+		if (total_dividend_units == 0) {
 			c->stock_info.last_dividend_per_unit = 0;
 			continue;
 		}
 
-		Money dividend_per_unit = dividend_pool / held_units;
+		Money dividend_per_unit = dividend_pool / total_dividend_units;
 		if (dividend_per_unit <= 0) {
 			c->stock_info.last_dividend_per_unit = 0;
 			continue;
@@ -216,19 +209,39 @@ void PayAnnualDividends()
 
 		c->stock_info.last_dividend_per_unit = dividend_per_unit;
 
+		/* Pay dividends to direct holders. */
 		for (auto &holder : c->stock_info.holders) {
 			Company *holder_company = Company::GetIfValid(holder.owner);
 			if (holder_company == nullptr) continue;
 
 			Money payment = holder.units * dividend_per_unit;
 
-			/* Pay dividend: deduct from issuing company, credit to holder */
 			c->money -= payment;
 			c->yearly_expenses[0][EXPENSES_DIVIDENDS] -= payment;
 			c->stock_info.total_dividends_paid += payment;
 
 			holder_company->money += payment;
 			holder_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
+		}
+
+		/* Pay dividends for escrowed units in sell orders back to the seller. */
+		for (const auto &order : _stock_order_book.orders) {
+			if (order.target != c->index) continue;
+			if (order.seller == order.target) continue; /* Skip IPO orders. */
+			uint16_t remaining = order.GetRemainingUnits();
+			if (remaining == 0) continue;
+
+			Company *seller_company = Company::GetIfValid(order.seller);
+			if (seller_company == nullptr) continue;
+
+			Money payment = remaining * dividend_per_unit;
+
+			c->money -= payment;
+			c->yearly_expenses[0][EXPENSES_DIVIDENDS] -= payment;
+			c->stock_info.total_dividends_paid += payment;
+
+			seller_company->money += payment;
+			seller_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
 		}
 	}
 
@@ -262,10 +275,13 @@ CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue, M
 		return CommandCost(STR_ERROR_STOCK_TOO_MANY_ORDERS);
 	}
 
-	/* Determine IPO price */
+	/* Determine IPO price, capped at 2x formula price to prevent manipulation. */
+	Money formula_price = CalculateFormulaPrice(c);
 	Money price_per_unit = ipo_price;
 	if (price_per_unit <= 0) {
-		price_per_unit = CalculateFormulaPrice(c);
+		price_per_unit = formula_price;
+	} else if (price_per_unit > formula_price * 2) {
+		return CommandCost(STR_ERROR_STOCK_IPO_PRICE_TOO_HIGH);
 	}
 
 	if (flags.Test(DoCommandFlag::Execute)) {
@@ -428,7 +444,7 @@ CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16
 	if (units > remaining) return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_AVAILABLE);
 
 	Money total_cost = order->ask_price * units;
-	CommandCost ret(EXPENSES_OTHER, total_cost);
+	CommandCost ret(EXPENSES_STOCK_PURCHASE, total_cost);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
 		/* Transfer money: buyer pays, seller receives. */
@@ -521,12 +537,15 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 		remaining_to_buy -= take;
 	}
 
-	/* Remaining from holders at current share price. */
+	/* Capture holder buyback price now, before order book fills change share_price via price discovery. */
+	Money holder_buyback_price = c->stock_info.share_price;
+
+	/* Remaining from holders at captured share price. */
 	if (remaining_to_buy > 0) {
-		total_cost += c->stock_info.share_price * remaining_to_buy;
+		total_cost += holder_buyback_price * remaining_to_buy;
 	}
 
-	CommandCost ret(EXPENSES_OTHER, total_cost);
+	CommandCost ret(EXPENSES_STOCK_PURCHASE, total_cost);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
 		remaining_to_buy = units;
@@ -557,7 +576,7 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 		/* Clean up filled orders. */
 		_stock_order_book.RemoveFilledOrders();
 
-		/* Buy back from holders at current share price. */
+		/* Buy back from holders at the price captured before order book processing. */
 		if (remaining_to_buy > 0) {
 			for (auto &holder : c->stock_info.holders) {
 				if (remaining_to_buy == 0) break;
@@ -566,10 +585,10 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 				holder.units -= take;
 				remaining_to_buy -= take;
 
-				/* Pay the holder. */
+				/* Pay the holder at the pre-captured price. */
 				Company *holder_company = Company::GetIfValid(holder.owner);
 				if (holder_company != nullptr) {
-					Money payment = c->stock_info.share_price * take;
+					Money payment = holder_buyback_price * take;
 					holder_company->money += payment;
 					holder_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
 				}

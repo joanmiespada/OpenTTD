@@ -179,6 +179,61 @@ TEST_CASE("StockOrderBook::CountOrdersBySeller")
 	}
 }
 
+TEST_CASE("StockOrderBook::RemoveOrdersForCompany")
+{
+	StockOrderBook book;
+	CompanyID c0{0};
+	CompanyID c1{1};
+	CompanyID c2{2};
+
+	SECTION("removes orders where company is seller") {
+		book.orders.push_back(MakeOrder(0, c0, c1, 10));
+		book.orders.push_back(MakeOrder(1, c1, c0, 10));
+		book.orders.push_back(MakeOrder(2, c2, c1, 10));
+
+		book.RemoveOrdersForCompany(c0);
+
+		CHECK(book.orders.size() == 1);
+		CHECK(book.FindOrder(0) == nullptr); /* c0 as seller */
+		CHECK(book.FindOrder(1) == nullptr); /* c0 as target */
+		CHECK(book.FindOrder(2) != nullptr); /* unrelated */
+	}
+
+	SECTION("removes orders where company is target") {
+		book.orders.push_back(MakeOrder(0, c1, c0, 10));
+		book.orders.push_back(MakeOrder(1, c2, c0, 5));
+
+		book.RemoveOrdersForCompany(c0);
+
+		CHECK(book.orders.empty());
+	}
+
+	SECTION("empty book is no-op") {
+		book.RemoveOrdersForCompany(c0);
+		CHECK(book.orders.empty());
+	}
+
+	SECTION("removes IPO orders (seller == target)") {
+		book.orders.push_back(MakeOrder(0, c0, c0, 10)); /* IPO */
+		book.orders.push_back(MakeOrder(1, c1, c1, 10)); /* other IPO */
+
+		book.RemoveOrdersForCompany(c0);
+
+		CHECK(book.orders.size() == 1);
+		CHECK(book.FindOrder(0) == nullptr);
+		CHECK(book.FindOrder(1) != nullptr);
+	}
+
+	SECTION("keeps unrelated orders intact") {
+		book.orders.push_back(MakeOrder(0, c1, c2, 10));
+		book.orders.push_back(MakeOrder(1, c2, c1, 5));
+
+		book.RemoveOrdersForCompany(c0);
+
+		CHECK(book.orders.size() == 2);
+	}
+}
+
 TEST_CASE("CompanyStockInfo::GetHeldUnits")
 {
 	CompanyStockInfo info;

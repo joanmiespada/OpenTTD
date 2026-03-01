@@ -40,6 +40,11 @@ private:
 	Scrollbar *investments_vscroll = nullptr;    ///< Scrollbar for investments list.
 	int line_height = 0;                         ///< Height of a single row.
 	Dimension icon{};                            ///< Size of a company icon sprite.
+	int col_company_width = 0;                   ///< Width of company name column.
+	int col_price_width = 0;                     ///< Width of share price column.
+	int col_avail_width = 0;                     ///< Width of available units column.
+	int col_hold_width = 0;                      ///< Width of your shares column.
+	int col_pl_width = 0;                        ///< Width of P&L column.
 	CompanyID selected_company = CompanyID::Invalid(); ///< Currently selected company in market list.
 	CompanyID selected_investment = CompanyID::Invalid(); ///< Currently selected investment.
 
@@ -287,16 +292,17 @@ public:
 		int text_y_offset = (this->line_height - GetCharacterHeight(FS_NORMAL)) / 2;
 		int icon_y_offset = (this->line_height - this->icon.height) / 2;
 
-		/* Draw header row. */
-		int col_price = ir.left + 200;
-		int col_avail = ir.left + 310;
-		int col_hold = ir.left + 410;
-		int col_pl = ir.left + 480;
+		/* Compute column positions from pre-calculated widths. */
+		int col_price = ir.left + this->col_company_width;
+		int col_avail = col_price + this->col_price_width;
+		int col_hold = col_avail + this->col_avail_width;
+		int col_pl = col_hold + this->col_hold_width;
 
-		DrawString(ir.left, col_price - 10, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_COMPANY, TC_WHITE);
-		DrawString(col_price, col_avail - 10, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_PRICE, TC_WHITE);
-		DrawString(col_avail, col_hold - 10, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_AVAILABLE, TC_WHITE);
-		DrawString(col_hold, col_pl - 10, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_YOUR_SHARES, TC_WHITE);
+		/* Draw header row. */
+		DrawString(ir.left, col_price, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_COMPANY, TC_WHITE);
+		DrawString(col_price, col_avail, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_PRICE, TC_WHITE);
+		DrawString(col_avail, col_hold, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_AVAILABLE, TC_WHITE);
+		DrawString(col_hold, col_pl, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_YOUR_SHARES, TC_WHITE);
 		DrawString(col_pl, ir.right, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_PL, TC_WHITE);
 		ir.top += this->line_height;
 
@@ -314,11 +320,11 @@ public:
 			DrawCompanyIcon(c->index, ir.left, ir.top + icon_y_offset);
 
 			/* Company name */
-			DrawString(ir.left + this->icon.width + 4, col_price - 10, ir.top + text_y_offset,
+			DrawString(ir.left + this->icon.width + 4, col_price, ir.top + text_y_offset,
 				GetString(STR_COMPANY_NAME, c->index), selected ? TC_WHITE : TC_BLACK);
 
 			/* Share price */
-			DrawString(col_price, col_avail - 10, ir.top + text_y_offset,
+			DrawString(col_price, col_avail, ir.top + text_y_offset,
 				GetString(STR_JUST_CURRENCY_LONG, c->stock_info.share_price), TC_GOLD);
 
 			/* Available units on order book */
@@ -326,13 +332,13 @@ public:
 			for (const auto &order : _stock_order_book.orders) {
 				if (order.target == c->index) available_on_book += order.GetRemainingUnits();
 			}
-			DrawString(col_avail, col_hold - 10, ir.top + text_y_offset,
+			DrawString(col_avail, col_hold, ir.top + text_y_offset,
 				GetString(STR_STOCK_MARKET_UNITS_FRACTION, available_on_book, c->stock_info.total_issued));
 
 			/* Your holdings */
 			const StockHolding *holding = c->stock_info.FindHolder(_local_company);
 			uint16_t your_units = (holding != nullptr) ? holding->units : 0;
-			DrawString(col_hold, col_pl - 10, ir.top + text_y_offset,
+			DrawString(col_hold, col_pl, ir.top + text_y_offset,
 				GetString(STR_JUST_INT, your_units));
 
 			/* P&L */
@@ -368,12 +374,33 @@ public:
 				resize.height = this->line_height;
 				break;
 
-			case WID_STM_COMPANY_LIST:
+			case WID_STM_COMPANY_LIST: {
 				/* Header line + space for companies. */
 				size.height = this->line_height * (MAX_COMPANIES + 1) + WidgetDimensions::scaled.framerect.Vertical();
-				size.width = std::max(size.width, 600u);
 				resize.height = this->line_height;
+
+				/* Compute column widths based on header string widths and representative content. */
+				int header_gap = WidgetDimensions::scaled.hsep_normal;
+				this->col_price_width = std::max(
+					GetStringBoundingBox(STR_STOCK_MARKET_HEADER_PRICE).width,
+					GetStringBoundingBox(GetString(STR_JUST_CURRENCY_LONG, (Money)999999999)).width) + header_gap;
+				this->col_avail_width = std::max(
+					GetStringBoundingBox(STR_STOCK_MARKET_HEADER_AVAILABLE).width,
+					GetStringBoundingBox(GetString(STR_STOCK_MARKET_UNITS_FRACTION, (uint16_t)9999, (uint16_t)9999)).width) + header_gap;
+				this->col_hold_width = std::max(
+					GetStringBoundingBox(STR_STOCK_MARKET_HEADER_YOUR_SHARES).width,
+					GetStringBoundingBox(GetString(STR_JUST_INT, (int64_t)9999)).width) + header_gap;
+				this->col_pl_width = std::max(
+					GetStringBoundingBox(STR_STOCK_MARKET_HEADER_PL).width,
+					GetStringBoundingBox(GetString(STR_JUST_CURRENCY_LONG, (Money)999999999)).width) + header_gap;
+				int data_cols_width = this->col_price_width + this->col_avail_width + this->col_hold_width + this->col_pl_width;
+				this->col_company_width = std::max(
+					(int)GetStringBoundingBox(STR_STOCK_MARKET_HEADER_COMPANY).width + header_gap,
+					200); /* Minimum width for company names. */
+
+				size.width = std::max(size.width, (uint)(this->col_company_width + data_cols_width + WidgetDimensions::scaled.framerect.Horizontal()));
 				break;
+			}
 		}
 	}
 

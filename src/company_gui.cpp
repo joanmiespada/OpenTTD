@@ -90,6 +90,7 @@ static const std::initializer_list<ExpensesType> _expenses_list_capital_costs = 
 /** List of stock market income/expenses. */
 static const std::initializer_list<ExpensesType> _expenses_list_stock = {
 	EXPENSES_STOCK_REVENUE,
+	EXPENSES_STOCK_PURCHASE,
 	EXPENSES_DIVIDENDS,
 };
 
