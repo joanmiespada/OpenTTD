@@ -77,9 +77,9 @@ WindowList _z_windows;
 /** If false, highlight is white, otherwise the by the widget defined colour. */
 bool _window_highlight_colour = false;
 
-/*
+/**
  * Window that currently has focus. - The main purpose is to generate
- * #FocusLost events, not to give next window in z-order focus when a
+ * #Window::OnFocusLost events, not to give next window in z-order focus when a
  * window is closed.
  */
 Window *_focused_window;
@@ -104,7 +104,19 @@ std::vector<WindowDesc*> *_window_descs = nullptr;
 /** Config file to store WindowDesc */
 std::string _windows_file;
 
-/** Window description constructor. */
+/**
+ * Window description constructor.
+ * @param def_pos The default location to open the window.
+ * @param ini_key The key for storing settings of this window in the savegame.
+ * @param def_width_trad The default width without scaling.
+ * @param def_height_trad The default height without scaling.
+ * @param window_class The class of windows.
+ * @param parent_class The window class of our parents.
+ * @param flags Arbitrary flags to describe certain behaviour of the window.
+ * @param nwid_parts The widgets of the window.
+ * @param hotkeys The optional hotkeys.
+ * @param location The source code location where the window is instantiated.
+ */
 WindowDesc::WindowDesc(WindowPosition def_pos, std::string_view ini_key, int16_t def_width_trad, int16_t def_height_trad,
 			WindowClass window_class, WindowClass parent_class, WindowDefaultFlags flags,
 			const std::span<const NWidgetPart> nwid_parts, HotkeyList *hotkeys,
@@ -124,6 +136,7 @@ WindowDesc::WindowDesc(WindowPosition def_pos, std::string_view ini_key, int16_t
 	_window_descs->push_back(this);
 }
 
+/** Remove ourselves from the global list of window descs. */
 WindowDesc::~WindowDesc()
 {
 	_window_descs->erase(std::ranges::find(*_window_descs, this));
@@ -1414,7 +1427,6 @@ static void BringWindowToFront(Window *w, bool dirty)
 /**
  * Initializes the data (except the position and initial size) of a new Window.
  * @param window_number Number being assigned to the new window
- * @return Window pointer of the newly created window
  * @pre If nested widgets are used (\a widget is \c nullptr), #nested_root and #nested_array_size must be initialized.
  *      In addition, #widget_lookup is either \c nullptr, or already initialized.
  */
@@ -2804,7 +2816,7 @@ static constexpr int MAX_OFFSET_HOVER = 5; ///< Maximum mouse movement before st
 
 extern EventState VpHandlePlaceSizingDrag();
 
-const std::chrono::milliseconds TIME_BETWEEN_DOUBLE_CLICK(500); ///< Time between 2 left clicks before it becoming a double click.
+const std::chrono::milliseconds TIME_BETWEEN_DOUBLE_CLICK{500}; ///< Time between 2 left clicks before it becoming a double click.
 
 static void ScrollMainViewport(int x, int y)
 {
@@ -3091,6 +3103,7 @@ bool CanContinueRealtimeTick()
 
 /**
  * Dispatch OnRealtimeTick event over all windows
+ * @param delta_ms The number of milliseconds since the last call.
  */
 void CallWindowRealtimeTickEvent(uint delta_ms)
 {
@@ -3610,6 +3623,7 @@ void RelocateAllWindows(int neww, int newh)
 /**
  * Hide the window and all its child windows, and mark them for a later deletion.
  * Always call ResetObjectToPlace() when closing a PickerWindow.
+ * @copydoc Window::Close
  */
 void PickerWindowBase::Close([[maybe_unused]] int data)
 {

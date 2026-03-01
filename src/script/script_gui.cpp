@@ -783,6 +783,7 @@ struct ScriptDebugWindow : public Window {
 		this->InvalidateData(-1);
 	}
 
+	/** Save the last sorting state. */
 	~ScriptDebugWindow() override
 	{
 		ScriptDebugWindow::initial_state = this->filter;
@@ -1016,8 +1017,8 @@ struct ScriptDebugWindow : public Window {
 			case WID_SCRD_RELOAD_TOGGLE:
 				if (this->filter.script_debug_company == OWNER_DEITY) break;
 				/* First kill the company of the AI, then start a new one. This should start the current AI again */
-				Command<Commands::CompanyControl>::Post(CCA_DELETE, this->filter.script_debug_company, CRR_MANUAL, INVALID_CLIENT_ID);
-				Command<Commands::CompanyControl>::Post(CCA_NEW_AI, this->filter.script_debug_company, CRR_NONE, INVALID_CLIENT_ID);
+				Command<Commands::CompanyControl>::Post(CompanyCtrlAction::Delete, this->filter.script_debug_company, CompanyRemoveReason::Manual, INVALID_CLIENT_ID);
+				Command<Commands::CompanyControl>::Post(CompanyCtrlAction::NewAI, this->filter.script_debug_company, CompanyRemoveReason::None, INVALID_CLIENT_ID);
 				break;
 
 			case WID_SCRD_SETTINGS:
@@ -1195,7 +1196,7 @@ struct ScriptDebugWindow : public Window {
 	}, ScriptDebugGlobalHotkeys};
 };
 
-/** Make a number of rows with buttons for each company for the Script debug window. */
+/** Make a number of rows with buttons for each company for the Script debug window. @copydoc NWidgetFunctionType */
 std::unique_ptr<NWidgetBase> MakeCompanyButtonRowsScriptDebug()
 {
 	return MakeCompanyButtonRows(WID_SCRD_COMPANY_BUTTON_START, WID_SCRD_COMPANY_BUTTON_END, COLOUR_GREY, 5, STR_AI_DEBUG_SELECT_AI_TOOLTIP, false);
@@ -1262,6 +1263,7 @@ static WindowDesc _script_debug_desc(
  * Open the Script debug window and select the given company.
  * @param show_company Display debug information about this AI company.
  * @param new_window Show in new window instead of existing window.
+ * @return The existing or allocated window, or \c nullptr when there is no debug window to show.
  */
 Window *ShowScriptDebugWindow(CompanyID show_company, bool new_window)
 {

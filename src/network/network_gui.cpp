@@ -175,11 +175,12 @@ public:
 
 class NetworkGameWindow : public Window {
 protected:
-	/* Runtime saved values */
+	/** Runtime saved values. */
 	static Listing last_sorting;
 
-	/* Constants for sorting servers */
+	/** Functions for sorting servers. */
 	static const std::initializer_list<GUIGameServerList::SortFunction * const> sorter_funcs;
+	/** Functions for filtering servers. */
 	static const std::initializer_list<GUIGameServerList::FilterFunction * const> filter_funcs;
 
 	NetworkGame *server = nullptr; ///< Selected server.
@@ -191,8 +192,8 @@ protected:
 	QueryString filter_editbox; ///< Editbox for filter on servers.
 	bool searched_internet = false; ///< Did we ever press "Search Internet" button?
 
-	Dimension lock{}; /// Dimension of lock icon.
-	Dimension blot{}; /// Dimension of compatibility icon.
+	Dimension lock{}; ///< Dimension of lock icon.
+	Dimension blot{}; ///< Dimension of compatibility icon.
 
 	/**
 	 * (Re)build the GUI network game list (a.k.a. this->servers) as some
@@ -335,14 +336,15 @@ protected:
 		}
 	}
 
-	static bool NGameSearchFilter(NetworkGame * const *item, StringFilter &sf)
+	/** Filter the servers by the server name. @copydoc GUIList::FilterFunction */
+	static bool NGameSearchFilter(NetworkGame * const *item, StringFilter &filter)
 	{
 		assert(item != nullptr);
 		assert((*item) != nullptr);
 
-		sf.ResetState();
-		sf.AddLine((*item)->info.server_name);
-		return sf.GetState();
+		filter.ResetState();
+		filter.AddLine((*item)->info.server_name);
+		return filter.GetState();
 	}
 
 	/**
@@ -463,6 +465,7 @@ public:
 		this->servers.ForceRebuild();
 	}
 
+	/** Save the last sorting state. */
 	~NetworkGameWindow() override
 	{
 		this->last_sorting = this->servers.GetListing();
@@ -1280,16 +1283,6 @@ static WindowDesc _client_list_desc(
 );
 
 /**
- * The possibly entries in a DropDown for an admin.
- * Client and companies are mixed; they just have to be unique.
- */
-enum DropDownAdmin : uint8_t {
-	DD_CLIENT_ADMIN_KICK,
-	DD_CLIENT_ADMIN_BAN,
-	DD_COMPANY_ADMIN_RESET,
-};
-
-/**
  * Callback function for admin command to kick client.
  * @param confirmed Iff the user pressed Yes.
  */
@@ -1315,7 +1308,7 @@ static void AdminCompanyResetCallback(Window *, bool confirmed)
 {
 	if (confirmed) {
 		if (NetworkCompanyHasClients(_admin_company_id)) return;
-		Command<Commands::CompanyControl>::Post(CCA_DELETE, _admin_company_id, CRR_MANUAL, INVALID_CLIENT_ID);
+		Command<Commands::CompanyControl>::Post(CompanyCtrlAction::Delete, _admin_company_id, CompanyRemoveReason::Manual, INVALID_CLIENT_ID);
 	}
 }
 
@@ -1345,10 +1338,13 @@ public:
 		this->height = d.height + WidgetDimensions::scaled.framerect.Vertical();
 		this->width = d.width + WidgetDimensions::scaled.framerect.Horizontal();
 	}
+	/** Ensure the destructor of the sub classes are called as well. */
 	virtual ~ButtonCommon() = default;
 
 	/**
 	 * OnClick handler for when the button is pressed.
+	 * @param w The window the click was in.
+	 * @param pt The location the click was at.
 	 */
 	virtual void OnClick(struct NetworkClientListWindow *w, Point pt) = 0;
 };
@@ -1390,6 +1386,7 @@ class ButtonLine {
 public:
 	std::vector<std::unique_ptr<ButtonCommon>> buttons{}; ///< Buttons for this line.
 
+	/** Ensure the destructor of the sub classes are called as well. */
 	virtual ~ButtonLine() = default;
 
 	/**
@@ -1541,6 +1538,18 @@ private:
  */
 struct NetworkClientListWindow : Window {
 private:
+	/**
+	 * The possible entries in a DropDown for an admin action.
+	 * Client and companies are mixed; they just have to be unique.
+	 */
+	enum class DropDownAction : uint8_t {
+		AdminKickClient, ///< Admin kick client.
+		AdminBanClient, ///< Admin ban client.
+		AdminResetCompany, ///< Admin reset company.
+		CompanyAllowAny, ///< Allow any client.
+		CompanyAllowListed, ///< Allow only listed clients.
+	};
+
 	ClientListWidgets query_widget{}; ///< During a query this tracks what widget caused the query.
 
 	ClientID dd_client_id{}; ///< During admin dropdown, track which client this was for.
@@ -1586,7 +1595,7 @@ private:
 	 */
 	static void OnClickCompanyNew([[maybe_unused]] NetworkClientListWindow *w, [[maybe_unused]] Point pt, CompanyID)
 	{
-		Command<Commands::CompanyControl>::Post(CCA_NEW, CompanyID::Invalid(), CRR_NONE, _network_own_client_id);
+		Command<Commands::CompanyControl>::Post(CompanyCtrlAction::New, CompanyID::Invalid(), CompanyRemoveReason::None, _network_own_client_id);
 	}
 
 	/**
@@ -1598,8 +1607,8 @@ private:
 	static void OnClickClientAdmin([[maybe_unused]] NetworkClientListWindow *w, [[maybe_unused]] Point pt, ClientID client_id)
 	{
 		DropDownList list;
-		list.push_back(MakeDropDownListStringItem(STR_NETWORK_CLIENT_LIST_ADMIN_CLIENT_KICK, DD_CLIENT_ADMIN_KICK));
-		list.push_back(MakeDropDownListStringItem(STR_NETWORK_CLIENT_LIST_ADMIN_CLIENT_BAN, DD_CLIENT_ADMIN_BAN));
+		list.push_back(MakeDropDownListStringItem(STR_NETWORK_CLIENT_LIST_ADMIN_CLIENT_KICK, to_underlying(DropDownAction::AdminKickClient)));
+		list.push_back(MakeDropDownListStringItem(STR_NETWORK_CLIENT_LIST_ADMIN_CLIENT_BAN, to_underlying(DropDownAction::AdminBanClient)));
 
 		Rect wi_rect;
 		wi_rect.left   = pt.x;
@@ -1620,7 +1629,11 @@ private:
 	static void OnClickCompanyAdmin([[maybe_unused]] NetworkClientListWindow *w, [[maybe_unused]] Point pt, CompanyID company_id)
 	{
 		DropDownList list;
-		list.push_back(MakeDropDownListStringItem(STR_NETWORK_CLIENT_LIST_ADMIN_COMPANY_RESET, DD_COMPANY_ADMIN_RESET, NetworkCompanyHasClients(company_id)));
+		if (_network_server) list.push_back(MakeDropDownListStringItem(STR_NETWORK_CLIENT_LIST_ADMIN_COMPANY_RESET, to_underlying(DropDownAction::AdminResetCompany), NetworkCompanyHasClients(company_id)));
+		if (const Company *c = Company::GetIfValid(company_id); c != nullptr) {
+			list.push_back(MakeDropDownListStringItem(STR_NETWORK_CLIENT_LIST_ADMIN_COMPANY_ALLOW_ANY, to_underlying(DropDownAction::CompanyAllowAny), c->allow_any));
+			list.push_back(MakeDropDownListStringItem(STR_NETWORK_CLIENT_LIST_ADMIN_COMPANY_ALLOW_LISTED, to_underlying(DropDownAction::CompanyAllowListed), !c->allow_any));
+		}
 
 		Rect wi_rect;
 		wi_rect.left   = pt.x;
@@ -1631,6 +1644,7 @@ private:
 		w->dd_company_id = company_id;
 		ShowDropDownListAt(w, std::move(list), -1, WID_CL_MATRIX, wi_rect, COLOUR_GREY, DropDownOption::InstantClose);
 	}
+
 	/**
 	 * Chat button on a Client is clicked.
 	 * @param w The instance of this window.
@@ -1645,7 +1659,7 @@ private:
 	static void OnClickClientAuthorize([[maybe_unused]] NetworkClientListWindow *w, [[maybe_unused]] Point pt, ClientID client_id)
 	{
 		AutoRestoreBackup<CompanyID> cur_company(_current_company, NetworkClientInfo::GetByClientID(_network_own_client_id)->client_playas);
-		Command<Commands::CompanyAllowListControl>::Post(CALCA_ADD, NetworkClientInfo::GetByClientID(client_id)->public_key);
+		Command<Commands::CompanyAllowListControl>::Post(CompanyAllowListCtrlAction::AddKey, NetworkClientInfo::GetByClientID(client_id)->public_key);
 	}
 
 	/**
@@ -1657,7 +1671,9 @@ private:
 	void RebuildListCompany(CompanyID company_id, CompanyID client_playas, bool can_join_company)
 	{
 		ButtonLine &company_line = *this->buttons.emplace_back(std::make_unique<CompanyButtonLine>(company_id));
-		if (_network_server) company_line.AddButton<CompanyButton>(SPR_ADMIN, STR_NETWORK_CLIENT_LIST_ADMIN_COMPANY_TOOLTIP, COLOUR_RED, company_id, &NetworkClientListWindow::OnClickCompanyAdmin, company_id == COMPANY_SPECTATOR);
+		if (_network_server || company_id == _local_company) {
+			company_line.AddButton<CompanyButton>(SPR_ADMIN, STR_NETWORK_CLIENT_LIST_ADMIN_COMPANY_TOOLTIP, COLOUR_RED, company_id, &NetworkClientListWindow::OnClickCompanyAdmin, company_id == COMPANY_SPECTATOR);
+		}
 		ButtonCommon &chat_button = company_line.AddButton<CompanyButton>(SPR_CHAT, company_id == COMPANY_SPECTATOR ? STR_NETWORK_CLIENT_LIST_CHAT_SPECTATOR_TOOLTIP : STR_NETWORK_CLIENT_LIST_CHAT_COMPANY_TOOLTIP, COLOUR_ORANGE, company_id, &NetworkClientListWindow::OnClickCompanyChat);
 		if (can_join_company) company_line.AddButton<CompanyButton>(SPR_JOIN, STR_NETWORK_CLIENT_LIST_JOIN_TOOLTIP, COLOUR_ORANGE, company_id, &NetworkClientListWindow::OnClickCompanyJoin, company_id != COMPANY_SPECTATOR && Company::Get(company_id)->is_ai);
 
@@ -1700,7 +1716,7 @@ private:
 		for (const Company *c : Company::Iterate()) {
 			if (c->index == client_playas) continue;
 
-			this->RebuildListCompany(c->index, client_playas, (own_ci != nullptr && c->allow_list.Contains(own_ci->public_key)) || _network_server);
+			this->RebuildListCompany(c->index, client_playas, _network_server || c->allow_any || (own_ci != nullptr && c->allow_list.Contains(own_ci->public_key)));
 		}
 
 		/* Spectators */
@@ -1878,24 +1894,36 @@ public:
 				QueryCallbackProc *callback = nullptr;
 
 				EncodedString text;
-				switch (index) {
-					case DD_CLIENT_ADMIN_KICK:
+				switch (static_cast<DropDownAction>(index)) {
+					case DropDownAction::AdminKickClient:
 						_admin_client_id = this->dd_client_id;
 						callback = AdminClientKickCallback;
 						text = GetEncodedString(STR_NETWORK_CLIENT_LIST_ASK_CLIENT_KICK, NetworkClientInfo::GetByClientID(_admin_client_id)->client_name);
 						break;
 
-					case DD_CLIENT_ADMIN_BAN:
+					case DropDownAction::AdminBanClient:
 						_admin_client_id = this->dd_client_id;
 						callback = AdminClientBanCallback;
 						text = GetEncodedString(STR_NETWORK_CLIENT_LIST_ASK_CLIENT_BAN, NetworkClientInfo::GetByClientID(_admin_client_id)->client_name);
 						break;
 
-					case DD_COMPANY_ADMIN_RESET:
+					case DropDownAction::AdminResetCompany:
 						_admin_company_id = this->dd_company_id;
 						callback = AdminCompanyResetCallback;
 						text = GetEncodedString(STR_NETWORK_CLIENT_LIST_ASK_COMPANY_RESET, _admin_company_id);
 						break;
+
+					case DropDownAction::CompanyAllowAny: {
+						AutoRestoreBackup cur_company(_current_company, this->dd_company_id);
+						Command<Commands::CompanyAllowListControl>::Post(CompanyAllowListCtrlAction::AllowAny, {});
+						return;
+					}
+
+					case DropDownAction::CompanyAllowListed: {
+						AutoRestoreBackup cur_company(_current_company, this->dd_company_id);
+						Command<Commands::CompanyAllowListControl>::Post(CompanyAllowListCtrlAction::AllowListed, {});
+						return;
+					}
 
 					default:
 						NOT_REACHED();

@@ -60,7 +60,14 @@ public:
 	using SorterWithFilter = bool(const T &a, const T &b, const P filter);
 
 	using SortFunction = std::conditional_t<std::is_same_v<P, std::nullptr_t>, bool (const T&, const T&), bool (const T&, const T&, const P)>; ///< Signature of sort function.
-	using FilterFunction = bool(const T*, F); ///< Signature of filter function.
+
+	/**
+	 * Check whether an element should be kept in the list.
+	 * @param item The element to check.
+	 * @param filter The filter parameter.
+	 * @return \c true iff the element should be in the list.
+	 */
+	using FilterFunction = bool(const T *item, F filter); ///< Signature of filter function.
 
 protected:
 	std::span<SortFunction * const> sort_func_list;     ///< the sort criteria functions
@@ -70,10 +77,12 @@ protected:
 	uint8_t filter_type;                        ///< what criteria to filter on
 	uint16_t resort_timer;                      ///< resort list after a given amount of ticks if set
 
-	/* If sort parameters are used then params must be a reference, however if not then params cannot be a reference as
-	 * it will not be able to reference anything. */
+	/**
+	 * If sort parameters are used then params must be a reference,
+	 * however if not then params cannot be a reference as it will not be able to reference anything.
+	 */
 	using SortParameterReference = std::conditional_t<std::is_same_v<P, std::nullptr_t>, P, P&>;
-	const SortParameterReference params;
+	const SortParameterReference params; ///< @copydoc SortParameterReference
 
 	/**
 	 * Check if the list is sortable

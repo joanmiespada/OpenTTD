@@ -93,6 +93,7 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 	 */
 	BaseStation(StationID index, TileIndex tile) : StationPool::PoolItem<&_station_pool>(index), xy(tile) {}
 
+	/** Ensure the destructor of the sub classes are called as well. */
 	virtual ~BaseStation();
 
 	/**
@@ -250,6 +251,7 @@ struct SpecializedStation : public BaseStation {
 
 	/**
 	 * Gets station with given index
+	 * @param index The pool index to look for.
 	 * @return pointer to station with given index cast to T *
 	 */
 	static inline T *Get(auto index)
@@ -259,6 +261,7 @@ struct SpecializedStation : public BaseStation {
 
 	/**
 	 * Returns station if the index is a valid index for this station type
+	 * @param index The pool index to look for.
 	 * @return pointer to station with given index if it's a station of this type
 	 */
 	static inline T *GetIfValid(auto index)

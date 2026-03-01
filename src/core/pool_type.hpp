@@ -74,7 +74,7 @@ struct EMPTY_BASES PoolID : PoolIDBase {
 	constexpr bool operator==(const size_t &rhs) const { return this->value == rhs; }
 	constexpr auto operator<=>(const size_t &rhs) const { return this->value <=> rhs; }
 private:
-	/* Do not explicitly initialize. */
+	/** The bare storage. @warning Do not explicitly initialize. */
 	TBaseType value;
 };
 
@@ -108,6 +108,7 @@ struct PoolBase {
 		PoolBase::GetPools()->push_back(this);
 	}
 
+	/** Ensure the destructor of the sub classes are called as well. */
 	virtual ~PoolBase();
 
 	/**
@@ -119,6 +120,7 @@ private:
 	/**
 	 * Dummy private copy constructor to prevent compilers from
 	 * copying the structure, which fails due to GetPools().
+	 * @param other The pool not to copy from.
 	 */
 	PoolBase(const PoolBase &other);
 };

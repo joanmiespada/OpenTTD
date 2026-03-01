@@ -114,7 +114,7 @@ NewGRFScanCallback *_request_newgrf_scan_callback = nullptr;
 /**
  * Error handling for fatal user errors.
  * @param str the string to print.
- * @note Does NEVER return.
+ * @attention Function does not return.
  */
 void UserErrorI(const std::string &str)
 {
@@ -132,11 +132,7 @@ void UserErrorI(const std::string &str)
 	_exit(1);
 }
 
-/**
- * Error handling for fatal non-user errors.
- * @param str the string to print.
- * @note Does NEVER return.
- */
+/* Doxygen in error_func.h */
 void FatalErrorI(const std::string &str)
 {
 	if (VideoDriver::GetInstance() == nullptr || VideoDriver::GetInstance()->HasGUI()) {
@@ -754,7 +750,7 @@ int openttd_main(std::span<std::string_view> arguments)
 	}
 
 	if (videodriver.empty() && !_ini_videodriver.empty()) videodriver = _ini_videodriver;
-	DriverFactoryBase::SelectDriver(videodriver, Driver::DT_VIDEO);
+	DriverFactoryBase::SelectDriver(videodriver, Driver::Type::Video);
 
 	InitializeSpriteSorter();
 
@@ -797,10 +793,10 @@ int openttd_main(std::span<std::string_view> arguments)
 	}
 
 	if (sounddriver.empty() && !_ini_sounddriver.empty()) sounddriver = _ini_sounddriver;
-	DriverFactoryBase::SelectDriver(sounddriver, Driver::DT_SOUND);
+	DriverFactoryBase::SelectDriver(sounddriver, Driver::Type::Sound);
 
 	if (musicdriver.empty() && !_ini_musicdriver.empty()) musicdriver = _ini_musicdriver;
-	DriverFactoryBase::SelectDriver(musicdriver, Driver::DT_MUSIC);
+	DriverFactoryBase::SelectDriver(musicdriver, Driver::Type::Music);
 
 	GenerateWorld(GWM_EMPTY, 64, 64); // Make the viewport initialization happy
 	LoadIntroGame(false);
@@ -938,6 +934,7 @@ static void MakeNewEditorWorld()
  * @param newgm switch to this mode of loading fails due to some unknown error
  * @param subdir default directory to look for filename, set to 0 if not needed
  * @param lf Load filter to use, if nullptr: use filename + subdir.
+ * @return \c true iff the save was loaded without problems.
  */
 bool SafeLoad(const std::string &filename, SaveLoadOperation fop, DetailedFileType dft, GameMode newgm, Subdirectory subdir, std::shared_ptr<LoadFilter> lf = nullptr)
 {

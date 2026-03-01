@@ -25,7 +25,6 @@
 
 #include "safeguards.h"
 
-/* Variables to display file lists */
 static std::string *_fios_path = nullptr;
 SortingBits _savegame_sort_order = SORT_BY_DATE | SORT_DESCENDING;
 
@@ -125,6 +124,7 @@ const FiosItem *FileList::FindItem(std::string_view file)
 
 /**
  * Get the current path/working directory.
+ * @return The current path.
  */
 std::string FiosGetCurrentPath()
 {

@@ -437,6 +437,10 @@ void Train::UpdateAcceleration()
 	this->acceleration = Clamp(power / weight * 4, 1, 255);
 }
 
+/**
+ * Get the offset for train image when it is used as cursor.
+ * @return The offset in horizontal direction.
+ */
 int Train::GetCursorImageOffset() const
 {
 	if (this->gcache.cached_veh_length != 8 && this->flags.Test(VehicleRailFlag::Flipped) && !EngInfo(this->engine_type)->misc_flags.Test(EngineMiscFlag::RailFlips)) {
@@ -490,7 +494,6 @@ static SpriteID GetDefaultTrainSprite(uint8_t spritenum, Direction direction)
  * @param direction Direction of view/travel.
  * @param image_type Visualisation context.
  * @param result Sprite sequence to add the to be drawn sprites to.
- * @return Sprite to display.
  */
 void Train::GetImage(Direction direction, EngineImageType image_type, VehicleSpriteSeq *result) const
 {
@@ -714,7 +717,10 @@ static CommandCost CmdBuildRailWagon(DoCommandFlags flags, TileIndex tile, const
 	return CommandCost();
 }
 
-/** Move all free vehicles in the depot to the train */
+/**
+ * Move all free vehicles in the depot to the train.
+ * @param u The train to move the free vehicles to.
+ */
 void NormalizeTrainVehInDepot(const Train *u)
 {
 	assert(u->IsEngine());
@@ -1619,7 +1625,7 @@ static void UpdateStatusAfterSwap(Train *v)
 	if (v->track != TRACK_BIT_WORMHOLE) {
 		VehicleEnterTile(v, v->tile, v->x_pos, v->y_pos);
 	} else {
-		/* VehicleEnter_TunnelBridge() sets TRACK_BIT_WORMHOLE when the vehicle
+		/* VehicleEnterTile_TunnelBridge() sets TRACK_BIT_WORMHOLE when the vehicle
 		 * is on the last bit of the bridge head (frame == TILE_SIZE - 1).
 		 * If we were swapped with such a vehicle, we have set TRACK_BIT_WORMHOLE,
 		 * when we shouldn't have. Check if this is the case. */
@@ -2212,7 +2218,6 @@ ClosestDepot Train::FindClosestDepot()
 	return ClosestDepot(tfdd.tile, GetDepotIndex(tfdd.tile), tfdd.reverse);
 }
 
-/** Play a sound for a train leaving the station. */
 void Train::PlayLeaveStationSound(bool force) const
 {
 	static const SoundFx sfx[] = {
@@ -2509,7 +2514,10 @@ static Track DoTrainPathfind(const Train *v, TileIndex tile, DiagDirection enter
 /**
  * Extend a train path as far as possible. Stops on encountering a safe tile,
  * another reservation or a track choice.
- * @return INVALID_TILE indicates that the reservation failed.
+ * @param v The train to extend the reservation for.
+ * @param new_tracks Optional pointer to the track bits at the end of the reservation.
+ * @param enterdir Optional pointer to the enter dir at the end of the reservation.
+ * @return Information about the reservation, empty if no path could be found.
  */
 static PBSTileInfo ExtendTrainReservation(const Train *v, TrackBits *new_tracks, DiagDirection *enterdir)
 {
@@ -3234,8 +3242,10 @@ static uint CheckTrainCollision(Vehicle *v, Train *t)
 	/* Happens when there is a train under bridge next to bridge head */
 	if (abs(v->z_pos - t->z_pos) > 5) return 0;
 
-	/* crash both trains */
-	return TrainCrashed(t) + TrainCrashed(coll);
+	/* Crash both trains. Two statements required to guarantee execution
+	 * order because RandomRange() is involved. */
+	uint num_victims = TrainCrashed(t);
+	return num_victims + TrainCrashed(coll);
 }
 
 /**
@@ -3244,6 +3254,7 @@ static uint CheckTrainCollision(Vehicle *v, Train *t)
  * Reports the incident in a flashy news item, modifies station ratings and
  * plays a sound.
  * @param v %Train to test.
+ * @return \c true iff there has been a collision.
  */
 static bool CheckTrainCollision(Train *v)
 {
@@ -4138,7 +4149,7 @@ bool Train::Tick()
 
 /**
  * Check whether a train needs service, and if so, find a depot or service it.
- * @return v %Train to check.
+ * @param v %Train to check.
  */
 static void CheckIfTrainNeedsService(Train *v)
 {

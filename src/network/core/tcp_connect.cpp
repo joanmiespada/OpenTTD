@@ -55,6 +55,7 @@ TCPServerConnecter::TCPServerConnecter(std::string_view connection_string, uint1
 	}
 }
 
+/** Wait until the resolving is done, then release the sockets. */
 TCPConnecter::~TCPConnecter()
 {
 	if (this->resolve_thread.joinable()) {
@@ -256,6 +257,7 @@ void TCPConnecter::Resolve()
 
 /**
  * Thunk to start Resolve() on the right instance.
+ * @param connecter The connector to resolve on.
  */
 /* static */ void TCPConnecter::ResolveThunk(TCPConnecter *connecter)
 {

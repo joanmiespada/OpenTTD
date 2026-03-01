@@ -144,7 +144,10 @@ class SpriteLayoutProcessor {
 public:
 	SpriteLayoutProcessor() = default;
 
-	/** Constructor for spritelayout, which do not need preprocessing. */
+	/**
+	 * Constructor for spritelayout, which do not need preprocessing.
+	 * @param raw_layout The raw sprite layout.
+	 */
 	SpriteLayoutProcessor(const NewGRFSpriteLayout &raw_layout) : raw_layout(&raw_layout) {}
 
 	SpriteLayoutProcessor(const NewGRFSpriteLayout &raw_layout, uint32_t orig_offset, uint32_t newgrf_ground_offset, uint32_t newgrf_offset, uint constr_stage, bool separate_ground);
@@ -152,6 +155,7 @@ public:
 	/**
 	 * Get values for variable 10 to resolve sprites for.
 	 * NewStations only.
+	 * @return Iterator over the bits of Var10.
 	 */
 	SetBitIterator<uint8_t, uint32_t> Var10Values() const { return this->var10_values; }
 
@@ -212,6 +216,7 @@ public:
 	std::vector<EntityIDMapping> mappings; ///< mapping of ids from grf files.  Public out of convenience
 
 	OverrideManagerBase(uint16_t offset, uint16_t maximum, uint16_t invalid);
+	/** Ensure the destructor of the sub classes are called as well. */
 	virtual ~OverrideManagerBase() = default;
 
 	void ResetOverride();
@@ -383,6 +388,7 @@ struct StandardGRFFileProps : FixedGRFFileProps<StandardSpriteGroup, static_cast
 
 	/**
 	 * Check whether the entity has sprite groups.
+	 * @return \c true iff this has a default sprite group.
 	 */
 	bool HasSpriteGroups() const
 	{
@@ -392,6 +398,7 @@ struct StandardGRFFileProps : FixedGRFFileProps<StandardSpriteGroup, static_cast
 	/**
 	 * Get the standard sprite group.
 	 * @param entity_exists Whether the entity exists (true), or is being constructed or shown in the GUI (false).
+	 * @return The purchase sprite group if \c entity_exists is \c true and it exists, otherwise the default sprite group or \c nullptr.
 	 */
 	const struct SpriteGroup *GetSpriteGroup(bool entity_exists) const
 	{
@@ -464,11 +471,14 @@ struct CargoGRFFileProps : VariableGRFFileProps<CargoType> {
  * NewGRF entities which can replace default entities.
  */
 struct SubstituteGRFFileProps : StandardGRFFileProps {
-	/** Set all default data constructor for the props. */
+	/**
+	 * Set all default data constructor for the props.
+	 * @param subst_id The id of the entity to replace.
+	 */
 	constexpr SubstituteGRFFileProps(uint16_t subst_id = 0) : subst_id(subst_id), override_id(subst_id) {}
 
-	uint16_t subst_id;
-	uint16_t override_id; ///< id of the entity been replaced by
+	uint16_t subst_id; ///< The id of the entity to replace.
+	uint16_t override_id; ///< The id of the entity been replaced by.
 };
 
 /** Container for a label for rail or road type conversion. */

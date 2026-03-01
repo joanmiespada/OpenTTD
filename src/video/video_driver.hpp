@@ -203,7 +203,7 @@ public:
 	 */
 	static VideoDriver *GetInstance()
 	{
-		return static_cast<VideoDriver *>(DriverFactoryBase::GetActiveDriver(Driver::DT_VIDEO).get());
+		return static_cast<VideoDriver *>(DriverFactoryBase::GetActiveDriver(Driver::Type::Video).get());
 	}
 
 	static std::string GetCaption();
@@ -213,11 +213,13 @@ public:
 	 * will make sure the buffer is unlocked no matter how the scope is exited.
 	 */
 	struct VideoBufferLocker {
+		/** Lock the video buffer. */
 		VideoBufferLocker()
 		{
 			this->unlock = VideoDriver::GetInstance()->LockVideoBuffer();
 		}
 
+		/** Release the video buffer. */
 		~VideoBufferLocker()
 		{
 			if (this->unlock) VideoDriver::GetInstance()->UnlockVideoBuffer();

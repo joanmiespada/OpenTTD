@@ -95,6 +95,7 @@ Win32FontCache::Win32FontCache(FontSize fs, const LOGFONT &logfont, int pixels) 
 	this->SetFontSize(pixels);
 }
 
+/** Release all the operating system objects. */
 Win32FontCache::~Win32FontCache()
 {
 	this->ClearFontCache();
@@ -275,6 +276,7 @@ public:
 	 * fallback search, use it. Otherwise, try to resolve it by font name.
 	 * @param fs The font size to load.
 	 * @param fonttype The type of font that is being loaded.
+	 * @return FontCache of the font if loaded, or \c nullptr.
 	 */
 	std::unique_ptr<FontCache> LoadFont(FontSize fs, FontType fonttype) const override
 	{

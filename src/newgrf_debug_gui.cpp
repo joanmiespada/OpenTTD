@@ -128,7 +128,7 @@ struct NIVariable {
 /** Helper class to wrap some functionality/queries in. */
 class NIHelper {
 public:
-	/** Silence a warning. */
+	/** Ensure the destructor of the sub classes are called as well. */
 	virtual ~NIHelper() = default;
 
 	/**
@@ -162,6 +162,7 @@ public:
 	/**
 	 * Get the name of this item.
 	 * @param index the index to get the name for.
+	 * @return The name of the inspected object.
 	 */
 	virtual std::string GetName(uint index) const = 0;
 
@@ -292,6 +293,7 @@ struct NewGRFInspectWindow : Window {
 
 	/**
 	 * Check whether this feature has chain index, i.e. refers to ground vehicles.
+	 * @return \c true iff the feature can have a chain of elements.
 	 */
 	bool HasChainIndex() const
 	{

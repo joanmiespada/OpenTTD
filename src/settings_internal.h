@@ -81,6 +81,7 @@ concept ConvertibleThroughBaseOrUnderlyingOrTo = ConvertibleThroughBaseOrTo<T, T
 struct SettingDesc {
 	SettingDesc(const SaveLoad &save, SettingFlags flags, bool startup) :
 		flags(flags), startup(startup), save(save) {}
+	/** Ensure the destructor of the sub classes are called as well. */
 	virtual ~SettingDesc() = default;
 
 	SettingFlags flags;  ///< Handles how a setting would show up in the GUI (text/currency, etc.).
@@ -149,16 +150,47 @@ struct SettingDesc {
 
 	/**
 	 * Reset the setting to its default value.
+	 * @param object The object to set the value of.
 	 */
 	virtual void ResetToDefault(void *object) const = 0;
 };
 
 /** Base integer type, including boolean, settings. Only these are shown in the settings UI. */
 struct IntSettingDesc : SettingDesc {
+	/**
+	 * Callback to get the title for the settings panel of this setting.
+	 * @param sd The setting to consider.
+	 * @return The StringID of the title.
+	 */
 	using GetTitleCallback = StringID(const IntSettingDesc &sd);
+
+	/**
+	 * Callback to get the help description for the settings panel of this setting.
+	 * @param sd The setting to consider.
+	 * @return The StringID of the help.
+	 */
 	using GetHelpCallback = StringID(const IntSettingDesc &sd);
+
+	/**
+	 * Callback to parameters for string formatting for this setting.
+	 * @param sd The setting to consider.
+	 * @param value The value of the setting.
+	 * @return The string parameters.
+	 */
 	using GetValueParamsCallback = std::pair<StringParameter, StringParameter>(const IntSettingDesc &sd, int32_t value);
+
+	/**
+	 * Callback to get default value for this setting.
+	 * @param sd The setting to consider.
+	 * @return The default value.
+	 */
 	using GetDefaultValueCallback = int32_t(const IntSettingDesc &sd);
+
+	/**
+	 * Callback to get range of valid values for this setting.
+	 * @param sd The setting to consider.
+	 * @return The range, start and end are included..
+	 */
 	using GetRangeCallback = std::tuple<int32_t, uint32_t>(const IntSettingDesc &sd);
 
 	/**
@@ -172,9 +204,9 @@ struct IntSettingDesc : SettingDesc {
 	using PreChangeCheck = bool(int32_t &value);
 	/**
 	 * A callback to denote that a setting has been changed.
-	 * @param The new value for the setting.
+	 * @param new_value The new value for the setting.
 	 */
-	using PostChangeCallback = void(int32_t value);
+	using PostChangeCallback = void(int32_t new_value);
 
 	template <ConvertibleThroughBaseOrUnderlyingOrTo<int32_t> Tdef, ConvertibleThroughBaseOrUnderlyingOrTo<int32_t> Tmin, ConvertibleThroughBaseOrUnderlyingOrTo<uint32_t> Tmax, ConvertibleThroughBaseOrUnderlyingOrTo<int32_t> Tinterval>
 	IntSettingDesc(const SaveLoad &save, SettingFlags flags, bool startup, Tdef def,

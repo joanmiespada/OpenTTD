@@ -71,11 +71,13 @@ public:
 
 	/**
 	 * Implicit conversion to the TileIndex.
+	 * @return The converted tile index.
 	 */
 	[[debug_inline]] inline constexpr operator TileIndex() const { return this->tile; }
 
 	/**
 	 * Implicit conversion to the uint for bounds checking.
+	 * @return The (unsigned) integer representation of the tile location.
 	 */
 	[[debug_inline]] inline constexpr operator uint() const { return this->tile.base(); }
 
@@ -213,9 +215,7 @@ private:
 		TileIndex index;
 	};
 
-	/*
-	 * Iterable ensemble of all Tiles
-	 */
+	/** Iterable ensemble of all %Tiles. */
 	struct IterateWrapper {
 		Iterator begin() { return Iterator(TileIndex{}); }
 		Iterator end() { return Iterator(TileIndex{Map::Size()}); }
@@ -314,7 +314,8 @@ public:
 	/**
 	 * 'Wraps' the given "tile" so it is within the map.
 	 * It does this by masking the 'high' bits of.
-	 * @param tile the tile to 'wrap'
+	 * @param tile the tile to 'wrap'.
+	 * @return The wrapped tile.
 	 */
 	static inline TileIndex WrapToMap(TileIndex tile)
 	{
@@ -408,6 +409,7 @@ inline TileIndexDiff TileDiffXY(int x, int y)
 	return TileIndex{(y >> 4 << Map::LogX()) + (x >> 4)};
 }
 
+TileIndex TileVirtXYClampedToMap(int x, int y);
 
 /**
  * Get the X component of a tile

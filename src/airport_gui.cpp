@@ -84,7 +84,7 @@ static void PlaceAirport(TileIndex tile)
 
 /** Airport build toolbar window handler. */
 struct BuildAirToolbarWindow : Window {
-	WidgetID last_user_action = INVALID_WIDGET; // Last started user action.
+	WidgetID last_user_action = INVALID_WIDGET; ///< Last started user action.
 
 	BuildAirToolbarWindow(WindowDesc &desc, WindowNumber window_number) : Window(desc)
 	{
@@ -243,13 +243,16 @@ class BuildAirportWindow : public PickerWindowBase {
 	int line_height = 0;
 	Scrollbar *vscroll = nullptr;
 
-	/** Build a dropdown list of available airport classes */
+	/**
+	 * Build a dropdown list of available airport classes.
+	 * @return The constructed dropdown list.
+	 */
 	static DropDownList BuildAirportClassDropDown()
 	{
 		DropDownList list;
 
 		for (const auto &cls : AirportClass::Classes()) {
-			list.push_back(MakeDropDownListStringItem(cls.name, cls.Index()));
+			list.push_back(MakeDropDownListStringItem(cls.name, cls.Index().base()));
 		}
 
 		return list;
@@ -271,7 +274,7 @@ public:
 		this->OnInvalidateData();
 
 		/* Ensure airport class is valid (changing NewGRFs). */
-		_selected_airport_class = Clamp(_selected_airport_class, APC_BEGIN, (AirportClassID)(AirportClass::GetClassCount() - 1));
+		_selected_airport_class = Clamp(_selected_airport_class, AirportClassID::Begin(), static_cast<AirportClassID>(AirportClass::GetClassCount() - 1));
 		const AirportClass *ac = AirportClass::Get(_selected_airport_class);
 		this->vscroll->SetCount(ac->GetSpecCount());
 
@@ -498,7 +501,7 @@ public:
 	{
 		switch (widget) {
 			case WID_AP_CLASS_DROPDOWN:
-				ShowDropDownList(this, BuildAirportClassDropDown(), _selected_airport_class, WID_AP_CLASS_DROPDOWN);
+				ShowDropDownList(this, BuildAirportClassDropDown(), _selected_airport_class.base(), WID_AP_CLASS_DROPDOWN);
 				break;
 
 			case WID_AP_AIRPORT_LIST: {
@@ -636,6 +639,6 @@ static void ShowBuildAirportPicker(Window *parent)
 
 void InitializeAirportGui()
 {
-	_selected_airport_class = APC_BEGIN;
+	_selected_airport_class = AirportClassID::Begin();
 	_selected_airport_index = -1;
 }

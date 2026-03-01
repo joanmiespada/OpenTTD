@@ -624,7 +624,7 @@ static void CompanyCheckBankrupt(Company *c)
 			 * player we are sure (the above check) that we are not the local
 			 * company and thus we won't be moved. */
 			if (!_networking || _network_server) {
-				Command<Commands::CompanyControl>::Post(CCA_DELETE, c->index, CRR_BANKRUPT, INVALID_CLIENT_ID);
+				Command<Commands::CompanyControl>::Post(CompanyCtrlAction::Delete, c->index, CompanyRemoveReason::Bankrupt, INVALID_CLIENT_ID);
 				return;
 			}
 			break;
@@ -1172,6 +1172,7 @@ CargoPayment::CargoPayment(CargoPaymentID index, Vehicle *front) :
 {
 }
 
+/** Execute the actual payment to the coffers of the company. */
 CargoPayment::~CargoPayment()
 {
 	if (CleaningPool()) return;
@@ -1503,7 +1504,7 @@ static void HandleStationRefit(Vehicle *v, CargoArray &consist_capleft, Station 
 
 	/* Refit if given a valid cargo. */
 	if (new_cargo_type < NUM_CARGO && new_cargo_type != v_start->cargo_type) {
-		/* StationID::Invalid() because in the DT_MANUAL case that's correct and in the DT_(A)SYMMETRIC
+		/* StationID::Invalid() because in the DistributionType::Manual case that's correct and in the DT_(A)SYMMETRIC
 		 * cases the next hop of the vehicle doesn't really tell us anything if the cargo had been
 		 * "via any station" before reserving. We rather produce some more "any station" cargo than
 		 * misrouting it. */

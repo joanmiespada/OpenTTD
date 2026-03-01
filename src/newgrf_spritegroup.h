@@ -43,7 +43,7 @@ using SpriteGroupID = PoolID<uint32_t, struct SpriteGroupIDTag, 1U << 30, 0xFFFF
 using SpriteGroupPool = Pool<SpriteGroup, SpriteGroupID, 1024, PoolType::Data>;
 extern SpriteGroupPool _spritegroup_pool;
 
-/* Common wrapper for all the different sprite group types */
+/** Common wrapper for all the different sprite group types. */
 struct SpriteGroup : SpriteGroupPool::PoolItem<&_spritegroup_pool> {
 protected:
 	SpriteGroup(SpriteGroupID index) : SpriteGroupPool::PoolItem<&_spritegroup_pool>(index) {}
@@ -55,6 +55,7 @@ protected:
 	virtual ResolverResult Resolve(ResolverObject &object) const = 0;
 
 public:
+	/** Ensure the destructor of the sub classes are called as well. */
 	virtual ~SpriteGroup() = default;
 
 	uint32_t nfo_line = 0;
@@ -83,8 +84,7 @@ struct SpecializedSpriteGroup : public SpriteGroup {
 };
 
 
-/* 'Real' sprite groups contain a list of other result or callback sprite
- * groups. */
+/** 'Real' sprite groups contain a list of other result or callback sprite groups. */
 struct RealSpriteGroup : SpecializedSpriteGroup<RealSpriteGroup> {
 	RealSpriteGroup(SpriteGroupID index) : SpecializedSpriteGroup<RealSpriteGroup>(index) {}
 
@@ -102,7 +102,7 @@ protected:
 	ResolverResult Resolve(ResolverObject &object) const override;
 };
 
-/* Shared by deterministic and random groups. */
+/** Shared by deterministic and random groups. */
 enum VarSpriteGroupScope : uint8_t {
 	VSG_BEGIN,
 
@@ -188,10 +188,10 @@ struct DeterministicSpriteGroup : SpecializedSpriteGroup<DeterministicSpriteGrou
 	std::vector<DeterministicSpriteGroupAdjust> adjusts{};
 	std::vector<DeterministicSpriteGroupRange> ranges{}; // Dynamically allocated
 
-	/* Dynamically allocated, this is the sole owner */
+	/** Dynamically allocated, this is the sole owner. */
 	DeterministicSpriteGroupResult default_result;
 
-	const SpriteGroup *error_group = nullptr; // was first range, before sorting ranges
+	const SpriteGroup *error_group = nullptr; ///< Was first range, before sorting ranges.
 
 protected:
 	ResolverResult Resolve(ResolverObject &object) const override;
@@ -220,8 +220,7 @@ protected:
 };
 
 
-/* This contains a callback result. A failed callback has a value of
- * CALLBACK_FAILED */
+/** This contains a callback result. A failed callback has a value of %CALLBACK_FAILED. */
 struct CallbackResultSpriteGroup : SpecializedSpriteGroup<CallbackResultSpriteGroup> {
 	/**
 	 * Creates a spritegroup representing a callback result
@@ -237,15 +236,13 @@ protected:
 };
 
 
-/* A result sprite group returns the first SpriteID and the number of
- * sprites in the set */
+/** A result sprite group returns the first SpriteID and the number of sprites in the set. */
 struct ResultSpriteGroup : SpecializedSpriteGroup<ResultSpriteGroup> {
 	/**
 	 * Creates a spritegroup representing a sprite number result.
 	 * @param index Unique (pool) identifier of the SpriteGroup.
 	 * @param sprite The sprite number.
 	 * @param num_sprites The number of sprites per set.
-	 * @return A spritegroup representing the sprite number result.
 	 */
 	ResultSpriteGroup(SpriteGroupID index, SpriteID sprite, uint8_t num_sprites) : SpecializedSpriteGroup<ResultSpriteGroup>(index), num_sprites(num_sprites), sprite(sprite) {}
 
@@ -296,6 +293,7 @@ struct ScopeResolver {
 	ResolverObject &ro; ///< Surrounding resolver object.
 
 	ScopeResolver(ResolverObject &ro) : ro(ro) {}
+	/** Ensure the destructor of the sub classes are called as well. */
 	virtual ~ScopeResolver() = default;
 
 	virtual uint32_t GetRandomBits() const;
@@ -328,6 +326,7 @@ public:
 	{
 	}
 
+	/** Ensure the destructor of the sub classes are called as well. */
 	virtual ~ResolverObject() = default;
 
 	ResolverResult DoResolve()
@@ -428,6 +427,7 @@ public:
 
 	/**
 	 * Used by RandomizedSpriteGroup: Triggers for rerandomisation
+	 * @return The triggers waiting for randomisation.
 	 */
 	uint32_t GetWaitingRandomTriggers() const
 	{
@@ -436,6 +436,7 @@ public:
 
 	/**
 	 * Used by RandomizedSpriteGroup: Consume triggers.
+	 * @param triggers The triggers t0 set as having used random triggers.
 	 */
 	void AddUsedRandomTriggers(uint32_t triggers)
 	{
@@ -459,12 +460,14 @@ public:
 	/**
 	 * Get the feature number being resolved for.
 	 * This function is mainly intended for the callback profiling feature.
+	 * @return The feature.
 	 */
 	virtual GrfSpecFeature GetFeature() const { return GSF_INVALID; }
 	/**
 	 * Get an identifier for the item being resolved.
 	 * This function is mainly intended for the callback profiling feature,
 	 * and should return an identifier recognisable by the NewGRF developer.
+	 * @return The identifier.
 	 */
 	virtual uint32_t GetDebugID() const { return 0; }
 };
@@ -479,6 +482,7 @@ struct SpecializedResolverObject : public ResolverObject {
 	/**
 	 * Set waiting triggers for rerandomisation.
 	 * This is scope independent, even though this is broken-by-design in most cases.
+	 * @param triggers The triggers to set wating.
 	 */
 	void SetWaitingRandomTriggers(RandomTriggers triggers)
 	{
@@ -488,6 +492,7 @@ struct SpecializedResolverObject : public ResolverObject {
 	/**
 	 * Get the triggers, which were "consumed" by some rerandomisation.
 	 * This is scope independent, even though this is broken-by-design in most cases.
+	 * @return The triggers that have used random triggers.
 	 */
 	RandomTriggers GetUsedRandomTriggers() const
 	{
