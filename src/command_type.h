@@ -385,6 +385,9 @@ enum class Commands : uint8_t {
 	CancelSellOrder, ///< cancel an existing sell order
 	FillSellOrder, ///< buy stock from a specific sell order
 	BuybackStock, ///< company buys back its own shares
+	PlaceBuyOrder, ///< place a buy order on the stock market
+	InitiateTakeover, ///< declare intent to take over a company
+	ExecuteTakeover, ///< complete the takeover after defense period
 
 	End, ///< @important Must ALWAYS be on the end of this list!! (period)
 };

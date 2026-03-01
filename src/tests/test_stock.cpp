@@ -294,3 +294,280 @@ TEST_CASE("CompanyStockInfo::FindHolder")
 		CHECK(empty_info.FindHolder(owner_a) == nullptr);
 	}
 }
+
+TEST_CASE("StockOrder::IsBuyOrder and IsSellOrder")
+{
+	SECTION("default side is Sell") {
+		StockOrder order;
+		CHECK(order.side == StockOrderSide::Sell);
+	}
+
+	SECTION("IsSellOrder returns true for default order") {
+		StockOrder order;
+		CHECK(order.IsSellOrder());
+		CHECK_FALSE(order.IsBuyOrder());
+	}
+
+	SECTION("IsBuyOrder returns true when side is Buy") {
+		StockOrder order;
+		order.side = StockOrderSide::Buy;
+		CHECK(order.IsBuyOrder());
+		CHECK_FALSE(order.IsSellOrder());
+	}
+
+	SECTION("IsSellOrder returns true when side is explicitly set to Sell") {
+		StockOrder order;
+		order.side = StockOrderSide::Sell;
+		CHECK(order.IsSellOrder());
+		CHECK_FALSE(order.IsBuyOrder());
+	}
+
+	SECTION("side can be changed from Buy back to Sell") {
+		StockOrder order;
+		order.side = StockOrderSide::Buy;
+		REQUIRE(order.IsBuyOrder());
+		order.side = StockOrderSide::Sell;
+		CHECK(order.IsSellOrder());
+		CHECK_FALSE(order.IsBuyOrder());
+	}
+
+	SECTION("IsBuyOrder and IsSellOrder are mutually exclusive for Buy") {
+		StockOrder order;
+		order.side = StockOrderSide::Buy;
+		/* Exactly one of the two must be true. */
+		CHECK(order.IsBuyOrder() != order.IsSellOrder());
+	}
+
+	SECTION("IsBuyOrder and IsSellOrder are mutually exclusive for Sell") {
+		StockOrder order;
+		order.side = StockOrderSide::Sell;
+		/* Exactly one of the two must be true. */
+		CHECK(order.IsBuyOrder() != order.IsSellOrder());
+	}
+}
+
+TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
+{
+	/* MatchOrders calls Company::GetIfValid() which requires the full game environment.
+	 * Without it the function breaks out early, but must leave the order book in a
+	 * consistent state and still remove any fully-filled orders via RemoveFilledOrders(). */
+
+	StockOrderBook book;
+	CompanyID c0{0};
+	CompanyID c1{1};
+	CompanyID target{2};
+
+	SECTION("matching with no orders is a no-op") {
+		book.MatchOrders(target);
+		CHECK(book.orders.empty());
+	}
+
+	SECTION("non-matching prices leave orders intact") {
+		/* Buy bid (50) < sell ask (100): no match should occur. */
+		StockOrder buy;
+		buy.order_id = 1;
+		buy.seller   = c0;
+		buy.target   = target;
+		buy.units    = 10;
+		buy.units_filled = 0;
+		buy.ask_price = 50;
+		buy.side      = StockOrderSide::Buy;
+
+		StockOrder sell;
+		sell.order_id = 2;
+		sell.seller   = c1;
+		sell.target   = target;
+		sell.units    = 10;
+		sell.units_filled = 0;
+		sell.ask_price = 100;
+		sell.side      = StockOrderSide::Sell;
+
+		book.orders.push_back(buy);
+		book.orders.push_back(sell);
+
+		book.MatchOrders(target);
+
+		/* Orders must still be present and untouched. */
+		REQUIRE(book.orders.size() == 2);
+		CHECK(book.FindOrder(1) != nullptr);
+		CHECK(book.FindOrder(2) != nullptr);
+		CHECK(book.FindOrder(1)->units_filled == 0);
+		CHECK(book.FindOrder(2)->units_filled == 0);
+	}
+
+	SECTION("same-owner buy and sell orders do not match") {
+		/* Even with bid >= ask, same owner must be rejected. */
+		StockOrder buy;
+		buy.order_id  = 1;
+		buy.seller    = c0;
+		buy.target    = target;
+		buy.units     = 10;
+		buy.units_filled = 0;
+		buy.ask_price = 200;
+		buy.side      = StockOrderSide::Buy;
+
+		StockOrder sell;
+		sell.order_id  = 2;
+		sell.seller    = c0; /* same owner as the buy order */
+		sell.target    = target;
+		sell.units     = 10;
+		sell.units_filled = 0;
+		sell.ask_price = 100;
+		sell.side      = StockOrderSide::Sell;
+
+		book.orders.push_back(buy);
+		book.orders.push_back(sell);
+
+		book.MatchOrders(target);
+
+		/* Neither order must be filled. */
+		REQUIRE(book.orders.size() == 2);
+		CHECK(book.FindOrder(1)->units_filled == 0);
+		CHECK(book.FindOrder(2)->units_filled == 0);
+	}
+
+	SECTION("orders for a different target are ignored") {
+		CompanyID other_target{3};
+
+		StockOrder buy;
+		buy.order_id  = 1;
+		buy.seller    = c0;
+		buy.target    = other_target;
+		buy.units     = 10;
+		buy.units_filled = 0;
+		buy.ask_price = 200;
+		buy.side      = StockOrderSide::Buy;
+
+		StockOrder sell;
+		sell.order_id  = 2;
+		sell.seller    = c1;
+		sell.target    = other_target;
+		sell.units     = 10;
+		sell.units_filled = 0;
+		sell.ask_price = 100;
+		sell.side      = StockOrderSide::Sell;
+
+		book.orders.push_back(buy);
+		book.orders.push_back(sell);
+
+		/* Match for 'target', not 'other_target'. */
+		book.MatchOrders(target);
+
+		/* Orders are for a different target — nothing should change. */
+		REQUIRE(book.orders.size() == 2);
+		CHECK(book.FindOrder(1)->units_filled == 0);
+		CHECK(book.FindOrder(2)->units_filled == 0);
+	}
+
+	SECTION("already-filled orders are removed even without game environment") {
+		/* Push a pre-filled order; MatchOrders must remove it via RemoveFilledOrders. */
+		StockOrder filled;
+		filled.order_id    = 1;
+		filled.seller      = c0;
+		filled.target      = target;
+		filled.units       = 5;
+		filled.units_filled = 5; /* already filled */
+		filled.ask_price   = 100;
+		filled.side        = StockOrderSide::Sell;
+
+		StockOrder open;
+		open.order_id    = 2;
+		open.seller      = c1;
+		open.target      = target;
+		open.units       = 5;
+		open.units_filled = 0;
+		open.ask_price   = 100;
+		open.side        = StockOrderSide::Sell;
+
+		book.orders.push_back(filled);
+		book.orders.push_back(open);
+
+		book.MatchOrders(target);
+
+		/* The pre-filled order must have been pruned. */
+		CHECK(book.FindOrder(1) == nullptr);
+		CHECK(book.FindOrder(2) != nullptr);
+	}
+}
+
+TEST_CASE("CompanyStockInfo takeover fields")
+{
+	SECTION("default takeover_defense_active is false") {
+		CompanyStockInfo info;
+		CHECK_FALSE(info.takeover_defense_active);
+	}
+
+	SECTION("default takeover_bidder is Invalid") {
+		CompanyStockInfo info;
+		CHECK(info.takeover_bidder == CompanyID::Invalid());
+	}
+
+	SECTION("takeover_defense_active can be set to true") {
+		CompanyStockInfo info;
+		info.takeover_defense_active = true;
+		CHECK(info.takeover_defense_active);
+	}
+
+	SECTION("takeover_bidder can be set and read back") {
+		CompanyStockInfo info;
+		CompanyID bidder{3};
+		info.takeover_bidder = bidder;
+		CHECK(info.takeover_bidder == bidder);
+	}
+
+	SECTION("takeover_defense_active can be cleared after being set") {
+		CompanyStockInfo info;
+		info.takeover_defense_active = true;
+		info.takeover_defense_active = false;
+		CHECK_FALSE(info.takeover_defense_active);
+	}
+
+	SECTION("takeover_bidder can be reset to Invalid") {
+		CompanyStockInfo info;
+		info.takeover_bidder = CompanyID{2};
+		info.takeover_bidder = CompanyID::Invalid();
+		CHECK(info.takeover_bidder == CompanyID::Invalid());
+	}
+
+	SECTION("takeover fields are independent of other CompanyStockInfo state") {
+		CompanyStockInfo info;
+		info.listed = true;
+		info.total_issued = 500;
+		info.share_price = 1000;
+
+		/* Defaults must still hold even when other fields are populated. */
+		CHECK_FALSE(info.takeover_defense_active);
+		CHECK(info.takeover_bidder == CompanyID::Invalid());
+	}
+}
+
+TEST_CASE("Stock market constants")
+{
+	SECTION("TAKEOVER_THRESHOLD_PERCENT is 51") {
+		CHECK(TAKEOVER_THRESHOLD_PERCENT == 51);
+	}
+
+	SECTION("TAKEOVER_DEFENSE_DAYS is 90") {
+		CHECK(TAKEOVER_DEFENSE_DAYS == 90);
+	}
+
+	SECTION("MAX_STOCK_UNITS is 1200") {
+		CHECK(MAX_STOCK_UNITS == 1200);
+	}
+
+	SECTION("STOCK_UNIT_SCALE is 100") {
+		CHECK(STOCK_UNIT_SCALE == 100);
+	}
+
+	SECTION("MAX_STOCK_ORDERS_PER_COMPANY is 32") {
+		CHECK(MAX_STOCK_ORDERS_PER_COMPANY == 32);
+	}
+
+	SECTION("MAX_TOTAL_STOCK_ORDERS is 512") {
+		CHECK(MAX_TOTAL_STOCK_ORDERS == 512);
+	}
+
+	SECTION("INVALID_STOCK_ORDER_ID is UINT32_MAX") {
+		CHECK(INVALID_STOCK_ORDER_ID == UINT32_MAX);
+	}
+}

@@ -200,6 +200,7 @@ add_files(
     script_signlist.hpp
     script_station.hpp
     script_stationlist.hpp
+    script_stock.hpp
     script_story_page.hpp
     script_storypagelist.hpp
     script_storypageelementlist.hpp
@@ -272,6 +273,7 @@ add_files(
     script_signlist.cpp
     script_station.cpp
     script_stationlist.cpp
+    script_stock.cpp
     script_story_page.cpp
     script_storypagelist.cpp
     script_storypageelementlist.cpp

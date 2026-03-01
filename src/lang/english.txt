@@ -621,6 +621,7 @@ STR_GRAPH_INCOME_CAPTION                                        :{WHITE}Income G
 STR_GRAPH_CARGO_DELIVERED_CAPTION                               :{WHITE}Units of cargo delivered
 STR_GRAPH_COMPANY_PERFORMANCE_RATINGS_CAPTION                   :{WHITE}Company performance ratings (maximum rating=1000)
 STR_GRAPH_COMPANY_VALUES_CAPTION                                :{WHITE}Company Value Graph
+STR_GRAPH_STOCK_PRICE_CAPTION                                   :{WHITE}Stock Price History
 
 STR_GRAPH_LAST_24_MINUTES_TIME_LABEL                            :{TINY_FONT}{BLACK}Last 24 minutes
 STR_GRAPH_LAST_72_MINUTES_TIME_LABEL                            :{TINY_FONT}{BLACK}Last 72 minutes
@@ -722,6 +723,8 @@ STR_STOCK_MARKET_BUY_QUERY                                      :Enter the numbe
 STR_STOCK_MARKET_SELL                                           :{BLACK}Sell Shares
 STR_STOCK_MARKET_SELL_TOOLTIP                                   :{BLACK}Sell shares of the selected company. Ctrl+Click to sell all holdings
 STR_STOCK_MARKET_SELL_QUERY                                     :Enter the number of share units to sell
+STR_STOCK_SHOW_PRICE_GRAPH                                      :{BLACK}Price Graph
+STR_STOCK_SHOW_PRICE_GRAPH_TOOLTIP                              :{BLACK}Show stock price history graph
 
 STR_ERROR_STOCK_MARKET_DISABLED                                 :{WHITE}Stock marketplace is disabled
 STR_ERROR_STOCK_NOT_LISTED                                      :{WHITE}This company has not issued stock
@@ -739,6 +742,30 @@ STR_ERROR_STOCK_NOT_YOUR_ORDER                                  :{WHITE}This is 
 STR_ERROR_STOCK_CANNOT_PLACE_ORDER                              :{WHITE}Cannot place sell order for your own company's stock
 STR_ERROR_STOCK_CANNOT_FILL_ORDER                               :{WHITE}Cannot fill your own sell order
 STR_ERROR_STOCK_IPO_PRICE_TOO_HIGH                              :{WHITE}IPO price too high... maximum is twice the formula valuation
+STR_ERROR_STOCK_INSUFFICIENT_OWNERSHIP                          :{WHITE}You need at least 51% ownership to initiate a takeover
+STR_ERROR_STOCK_TAKEOVER_IN_PROGRESS                            :{WHITE}A takeover attempt is already in progress
+STR_ERROR_STOCK_NO_TAKEOVER                                     :{WHITE}No takeover attempt is pending
+STR_ERROR_STOCK_NOT_YOUR_TAKEOVER                               :{WHITE}This is not your takeover attempt
+STR_ERROR_STOCK_DEFENSE_PERIOD                                  :{WHITE}The 90-day defense period has not yet elapsed
+STR_ERROR_STOCK_CANNOT_BUY_ORDER                                :{WHITE}Cannot place buy order...
+
+STR_NEWS_STOCK_IPO                                              :{BIG_FONT}{BLACK}{COMPANY} has listed {NUM} stock units at {CURRENCY_LONG} per unit
+STR_NEWS_STOCK_DIVIDEND                                         :{BIG_FONT}{BLACK}{COMPANY} has paid dividends of {CURRENCY_LONG} per unit
+STR_NEWS_STOCK_LARGE_TRADE                                      :{BIG_FONT}{BLACK}{COMPANY} has acquired a large stake in {COMPANY}
+STR_NEWS_STOCK_TAKEOVER_DEFENSE                                 :{BIG_FONT}{BLACK}{COMPANY} is under hostile takeover attempt by {COMPANY}
+STR_NEWS_STOCK_TAKEOVER                                         :{BIG_FONT}{BLACK}{COMPANY} has been taken over by {COMPANY}
+STR_NEWS_STOCK_BUYBACK                                          :{BIG_FONT}{BLACK}{COMPANY} is buying back its own stock
+
+STR_STOCK_PLACE_BUY_ORDER                                       :{BLACK}Place Buy Order
+STR_STOCK_PLACE_BUY_ORDER_TOOLTIP                               :{BLACK}Place a standing buy order at a limit price (Ctrl+Click to buy at market price)
+STR_STOCK_BUY_ORDER_UNITS_QUERY                                 :{WHITE}Number of units to bid for:
+STR_STOCK_BUY_ORDER_PRICE_QUERY                                 :{WHITE}Maximum price per unit:
+STR_STOCK_INITIATE_TAKEOVER                                     :{BLACK}Initiate Takeover
+STR_STOCK_INITIATE_TAKEOVER_TOOLTIP                             :{BLACK}Begin hostile takeover (requires >50% ownership)
+STR_STOCK_EXECUTE_TAKEOVER                                      :{BLACK}Complete Takeover
+STR_STOCK_EXECUTE_TAKEOVER_TOOLTIP                              :{BLACK}Complete the takeover after the defense period
+STR_STOCK_TAKEOVER_STATUS                                       :{RED}Takeover by {COMPANY} - Defense: {NUM} days remaining
+STR_STOCK_MARKET_BIDS                                           :Bids: {NUM}
 
 # Performance detail window
 STR_PERFORMANCE_DETAIL                                          :{WHITE}Detailed Performance Rating

@@ -23,6 +23,7 @@ static const SaveLoad _stock_order_desc[] = {
 	SLE_VAR(StockOrder, units_filled,   SLE_UINT16),
 	SLE_VAR(StockOrder, ask_price,      SLE_INT64),
 	SLE_VAR(StockOrder, creation_date,  SLE_INT32),
+	SLE_CONDVAR(StockOrder, side,       SLE_UINT8, SLV_STOCK_MARKET_V2, SL_MAX_VERSION),
 };
 
 /** Stock order book global header data. */

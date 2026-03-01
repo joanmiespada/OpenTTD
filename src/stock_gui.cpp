@@ -23,6 +23,7 @@
 #include "gfx_func.h"
 #include "textbuf_gui.h"
 #include "core/string_consumer.hpp"
+#include "graph_gui.h"
 
 #include "widgets/stock_widget.h"
 
@@ -498,6 +499,10 @@ public:
 				break;
 			}
 
+			case WID_STM_PRICE_GRAPH_BUTTON:
+				ShowStockPriceGraph();
+				break;
+
 			case WID_STM_SELL_BUTTON: {
 				if (this->selected_company == CompanyID::Invalid()) break;
 				if (_ctrl_pressed) {
@@ -653,6 +658,7 @@ static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets
 	NWidget(NWID_HORIZONTAL, NWidContainerFlag::EqualSize),
 		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_BUY_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_MARKET_BUY, STR_STOCK_MARKET_BUY_TOOLTIP),
 		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_SELL_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_MARKET_SELL, STR_STOCK_MARKET_SELL_TOOLTIP),
+		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_PRICE_GRAPH_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_SHOW_PRICE_GRAPH, STR_STOCK_SHOW_PRICE_GRAPH_TOOLTIP),
 	EndContainer(),
 };
 

@@ -416,6 +416,7 @@ enum SaveLoadVersion : uint16_t {
 	SLV_BUOYS_AT_0_0,                       ///< 364  PR#14983 Allow to build buoys at (0x0).
 	SLV_STOCK_MARKET,                       ///< 365  Stock marketplace for companies.
 	SLV_STOCK_ORDER_BOOK,                   ///< 366  Stock market order book and price history.
+	SLV_STOCK_MARKET_V2,                    ///< 367  Stock market buy orders and hostile takeovers.
 
 	SL_MAX_VERSION,                         ///< Highest possible saveload version
 };

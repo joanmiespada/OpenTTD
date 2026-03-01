@@ -562,6 +562,12 @@ enum WindowClass : uint16_t {
 	WC_COMPANY_VALUE,
 
 	/**
+	 * Stock price graph; %Window numbers:
+	 *   - 0 = #GraphWidgets
+	 */
+	WC_STOCK_PRICE_GRAPH,
+
+	/**
 	 * Company league window; %Window numbers:
 	 *   - 0 = #CompanyLeagueWidgets
 	 */

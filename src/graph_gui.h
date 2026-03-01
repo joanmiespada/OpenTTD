@@ -17,6 +17,7 @@ void ShowIncomeGraph();
 void ShowDeliveredCargoGraph();
 void ShowPerformanceHistoryGraph();
 void ShowCompanyValueGraph();
+void ShowStockPriceGraph();
 void ShowCargoPaymentRates();
 void ShowPerformanceRatingDetail();
 void ShowIndustryProductionGraph(WindowNumber window_number);

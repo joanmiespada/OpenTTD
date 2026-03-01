@@ -1186,6 +1186,58 @@ void ShowCompanyValueGraph()
 	AllocateWindowDescFront<CompanyValueGraphWindow>(_company_value_graph_desc, 0);
 }
 
+/***********************/
+/* STOCK PRICE HISTORY */
+/***********************/
+
+struct StockPriceGraphWindow : BaseCompanyGraphWindow {
+	StockPriceGraphWindow(WindowDesc &desc, WindowNumber window_number) :
+			BaseCompanyGraphWindow(desc, STR_JUST_CURRENCY_SHORT)
+	{
+		this->num_on_x_axis = GRAPH_NUM_MONTHS;
+		this->num_vert_lines = GRAPH_NUM_MONTHS;
+		this->draw_dates = !TimerGameEconomy::UsingWallclockUnits();
+
+		this->InitializeWindow(window_number);
+	}
+
+	OverflowSafeInt64 GetGraphData(const Company *c, int j) override
+	{
+		if (!c->stock_info.listed) return INVALID_DATAPOINT;
+		return c->old_economy[j].stock_price;
+	}
+};
+
+static constexpr std::initializer_list<NWidgetPart> _nested_stock_price_graph_widgets = {
+	NWidget(NWID_HORIZONTAL),
+		NWidget(WWT_CLOSEBOX, COLOUR_BROWN),
+		NWidget(WWT_CAPTION, COLOUR_BROWN), SetStringTip(STR_GRAPH_STOCK_PRICE_CAPTION, STR_TOOLTIP_WINDOW_TITLE_DRAG_THIS),
+		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_GRAPH_KEY_BUTTON), SetMinimalSize(50, 0), SetStringTip(STR_GRAPH_KEY_BUTTON, STR_GRAPH_KEY_TOOLTIP),
+		NWidget(WWT_SHADEBOX, COLOUR_BROWN),
+		NWidget(WWT_DEFSIZEBOX, COLOUR_BROWN),
+		NWidget(WWT_STICKYBOX, COLOUR_BROWN),
+	EndContainer(),
+	NWidget(WWT_PANEL, COLOUR_BROWN, WID_GRAPH_BACKGROUND),
+		NWidget(WWT_EMPTY, INVALID_COLOUR, WID_GRAPH_GRAPH), SetMinimalSize(576, 224), SetFill(1, 1), SetResize(1, 1),
+		NWidget(NWID_HORIZONTAL),
+			NWidget(WWT_TEXT, INVALID_COLOUR, WID_GRAPH_FOOTER), SetFill(1, 0), SetResize(1, 0), SetPadding(2, 0, 2, 0), SetTextStyle(TC_BLACK, FS_SMALL), SetAlignment(SA_CENTER),
+			NWidget(WWT_RESIZEBOX, COLOUR_BROWN, WID_GRAPH_RESIZE), SetResizeWidgetTypeTip(RWV_HIDE_BEVEL, STR_TOOLTIP_RESIZE),
+		EndContainer(),
+	EndContainer(),
+};
+
+static WindowDesc _stock_price_graph_desc(
+	WDP_AUTO, "graph_stock_price", 0, 0,
+	WC_STOCK_PRICE_GRAPH, WC_NONE,
+	{},
+	_nested_stock_price_graph_widgets
+);
+
+void ShowStockPriceGraph()
+{
+	AllocateWindowDescFront<StockPriceGraphWindow>(_stock_price_graph_desc, 0);
+}
+
 struct BaseCargoGraphWindow : BaseGraphWindow {
 	Scrollbar *vscroll = nullptr; ///< Cargo list scrollbar.
 	uint line_height = 0; ///< Pixel height of each cargo type row.

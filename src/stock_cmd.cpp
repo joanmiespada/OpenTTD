@@ -20,6 +20,8 @@
 #include "window_func.h"
 #include "timer/timer.h"
 #include "timer/timer_game_economy.h"
+#include "network/network_type.h"
+#include "company_cmd.h"
 
 #include "table/strings.h"
 
@@ -91,6 +93,72 @@ void StockOrderBook::RemoveOrdersForCompany(CompanyID company)
 		std::remove_if(this->orders.begin(), this->orders.end(),
 			[company](const StockOrder &o) { return o.seller == company || o.target == company; }),
 		this->orders.end());
+}
+
+/**
+ * Match buy and sell orders for a given target company.
+ * Executes trades when a buy order's bid price >= a sell order's ask price.
+ * @param target The company whose stock orders to match.
+ */
+void StockOrderBook::MatchOrders(CompanyID target)
+{
+	bool matched = true;
+	while (matched) {
+		matched = false;
+		StockOrder *best_buy = nullptr;
+		StockOrder *best_sell = nullptr;
+
+		for (auto &order : this->orders) {
+			if (order.target != target || order.IsFilled()) continue;
+			if (order.IsBuyOrder()) {
+				if (best_buy == nullptr || order.ask_price > best_buy->ask_price) best_buy = &order;
+			} else {
+				if (best_sell == nullptr || order.ask_price < best_sell->ask_price) best_sell = &order;
+			}
+		}
+
+		if (best_buy == nullptr || best_sell == nullptr) break;
+		if (best_buy->ask_price < best_sell->ask_price) break;
+		if (best_buy->seller == best_sell->seller) break;
+
+		Money trade_price = best_sell->ask_price;
+		uint16_t trade_units = std::min(best_buy->GetRemainingUnits(), best_sell->GetRemainingUnits());
+
+		Company *target_co = Company::GetIfValid(target);
+		if (target_co == nullptr) break;
+
+		/* Transfer shares to buyer. */
+		StockHolding *buyer_holding = target_co->stock_info.FindHolder(best_buy->seller);
+		if (buyer_holding != nullptr) {
+			Money old_total = buyer_holding->purchase_price * buyer_holding->units;
+			buyer_holding->units += trade_units;
+			buyer_holding->purchase_price = (old_total + trade_price * trade_units) / buyer_holding->units;
+		} else {
+			target_co->stock_info.holders.push_back({best_buy->seller, trade_units, trade_price});
+		}
+
+		/* Pay seller. */
+		Money payment = trade_price * trade_units;
+		Company *seller_co = Company::GetIfValid(best_sell->seller);
+		if (seller_co != nullptr) {
+			seller_co->money += payment;
+			seller_co->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
+		}
+
+		/* Refund overpayment to buyer. */
+		Money refund = (best_buy->ask_price - trade_price) * trade_units;
+		Company *buyer_co = Company::GetIfValid(best_buy->seller);
+		if (buyer_co != nullptr && refund > 0) {
+			buyer_co->money += refund;
+			buyer_co->yearly_expenses[0][EXPENSES_STOCK_PURCHASE] += refund;
+		}
+
+		best_buy->units_filled += trade_units;
+		best_sell->units_filled += trade_units;
+		target_co->stock_info.share_price = trade_price;
+		matched = true;
+	}
+	this->RemoveFilledOrders();
 }
 
 /**
@@ -224,6 +292,12 @@ void PayAnnualDividends()
 			holder_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
 		}
 
+		/* Announce dividend payment. */
+		if (dividend_per_unit > 0) {
+			AddNewsItem(GetEncodedString(STR_NEWS_STOCK_DIVIDEND, c->index, dividend_per_unit),
+				NewsType::Economy, NewsStyle::Normal, {});
+		}
+
 		/* Pay dividends for escrowed units in sell orders back to the seller. */
 		for (const auto &order : _stock_order_book.orders) {
 			if (order.target != c->index) continue;
@@ -300,6 +374,10 @@ CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue, M
 		order.creation_date = TimerGameEconomy::date;
 		_stock_order_book.orders.push_back(order);
 
+		/* Announce IPO in the news. */
+		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_IPO, _current_company, units_to_issue, price_per_unit),
+			NewsType::Economy, NewsStyle::Normal, {});
+
 		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
 
@@ -358,6 +436,9 @@ CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t u
 		order.creation_date = TimerGameEconomy::date;
 		_stock_order_book.orders.push_back(order);
 
+		/* Try to match against existing buy orders. */
+		_stock_order_book.MatchOrders(target);
+
 		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
 
@@ -382,7 +463,17 @@ CommandCost CmdCancelSellOrder(DoCommandFlags flags, StockOrderID order_id)
 	if (flags.Test(DoCommandFlag::Execute)) {
 		uint16_t remaining = order->GetRemainingUnits();
 
-		if (remaining > 0) {
+		if (order->IsBuyOrder()) {
+			/* Buy order cancel: refund escrowed money to the buyer. */
+			if (remaining > 0) {
+				Money refund = order->ask_price * remaining;
+				Company *buyer_company = Company::GetIfValid(order->seller);
+				if (buyer_company != nullptr) {
+					buyer_company->money += refund;
+					buyer_company->yearly_expenses[0][EXPENSES_STOCK_PURCHASE] += refund;
+				}
+			}
+		} else if (remaining > 0) {
 			/* Return escrowed units to seller's holding in the target company. */
 			Company *target_company = Company::GetIfValid(order->target);
 			if (target_company != nullptr) {
@@ -473,6 +564,13 @@ CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16
 		/* Remove fully filled orders. */
 		if (order->IsFilled()) {
 			_stock_order_book.RemoveFilledOrders();
+		}
+
+		/* News item for large trades (> 5% of total issued). */
+		if (target_company->stock_info.total_issued > 0 &&
+			units * 100 / target_company->stock_info.total_issued >= 5) {
+			AddNewsItem(GetEncodedString(STR_NEWS_STOCK_LARGE_TRADE, _current_company, order->target),
+				NewsType::Economy, NewsStyle::Normal, {});
 		}
 
 		InvalidateWindowClassesData(WC_STOCK_MARKET);
@@ -608,10 +706,205 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 			c->stock_info.listed = false;
 		}
 
+		/* Announce buyback in the news. */
+		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_BUYBACK, _current_company),
+			NewsType::Economy, NewsStyle::Normal, {});
+
 		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
 
 	return ret;
+}
+
+/**
+ * Place a buy order on the stock market order book.
+ * The buyer's money is escrowed at the bid price per unit.
+ * @param flags DoCommandFlags.
+ * @param target Company whose stock to buy.
+ * @param units Number of units to bid for.
+ * @param bid_price Maximum price per unit willing to pay.
+ * @return The cost of this operation or an error.
+ */
+CommandCost CmdPlaceBuyOrder(DoCommandFlags flags, CompanyID target, uint16_t units, Money bid_price)
+{
+	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
+
+	Company *target_company = Company::GetIfValid(target);
+	if (target_company == nullptr) return CMD_ERROR;
+
+	if (!target_company->stock_info.listed) return CommandCost(STR_ERROR_STOCK_NOT_LISTED);
+	if (units == 0) return CMD_ERROR;
+	if (bid_price <= 0) return CMD_ERROR;
+	if (_current_company == target) return CommandCost(STR_ERROR_STOCK_CANNOT_BUY_OWN);
+
+	/* Check buyer can afford the escrow. */
+	Company *buyer = Company::GetIfValid(_current_company);
+	if (buyer == nullptr) return CMD_ERROR;
+
+	Money max_cost = bid_price * units;
+	if (buyer->money < max_cost) return CommandCost(STR_ERROR_STOCK_CANNOT_BUY_ORDER);
+
+	/* Check order limits. */
+	if (_stock_order_book.CountOrdersBySeller(_current_company) >= MAX_STOCK_ORDERS_PER_COMPANY) {
+		return CommandCost(STR_ERROR_STOCK_TOO_MANY_ORDERS);
+	}
+	if (_stock_order_book.orders.size() >= MAX_TOTAL_STOCK_ORDERS) {
+		return CommandCost(STR_ERROR_STOCK_TOO_MANY_ORDERS);
+	}
+
+	if (flags.Test(DoCommandFlag::Execute)) {
+		/* Escrow money from buyer. */
+		buyer->money -= max_cost;
+		buyer->yearly_expenses[0][EXPENSES_STOCK_PURCHASE] -= max_cost;
+
+		/* Create the buy order. */
+		StockOrder order;
+		order.order_id = _stock_order_book.next_order_id++;
+		order.seller = _current_company; /* 'seller' field stores the order placer. */
+		order.target = target;
+		order.units = units;
+		order.units_filled = 0;
+		order.ask_price = bid_price; /* For buy orders, this is the max bid price. */
+		order.creation_date = TimerGameEconomy::date;
+		order.side = StockOrderSide::Buy;
+		_stock_order_book.orders.push_back(order);
+
+		/* Try to match against existing sell orders. */
+		_stock_order_book.MatchOrders(target);
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
+	}
+
+	return CommandCost();
+}
+
+/**
+ * Initiate a hostile takeover of a target company.
+ * Requires the initiating company to own >= TAKEOVER_THRESHOLD_PERCENT of the target's stock.
+ * @param flags DoCommandFlags.
+ * @param target Company to take over.
+ * @return The cost of this operation or an error.
+ */
+CommandCost CmdInitiateTakeover(DoCommandFlags flags, CompanyID target)
+{
+	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
+
+	Company *target_company = Company::GetIfValid(target);
+	if (target_company == nullptr) return CMD_ERROR;
+
+	if (!target_company->stock_info.listed) return CommandCost(STR_ERROR_STOCK_NOT_LISTED);
+	if (_current_company == target) return CMD_ERROR;
+
+	/* Check ownership threshold. */
+	const StockHolding *holding = target_company->stock_info.FindHolder(_current_company);
+	if (holding == nullptr) return CommandCost(STR_ERROR_STOCK_INSUFFICIENT_OWNERSHIP);
+
+	uint16_t ownership_percent = 0;
+	if (target_company->stock_info.total_issued > 0) {
+		ownership_percent = static_cast<uint16_t>(static_cast<uint32_t>(holding->units) * 100 / target_company->stock_info.total_issued);
+	}
+	if (ownership_percent < TAKEOVER_THRESHOLD_PERCENT) {
+		return CommandCost(STR_ERROR_STOCK_INSUFFICIENT_OWNERSHIP);
+	}
+
+	/* Check no defense already active. */
+	if (target_company->stock_info.takeover_defense_active) {
+		return CommandCost(STR_ERROR_STOCK_TAKEOVER_IN_PROGRESS);
+	}
+
+	if (flags.Test(DoCommandFlag::Execute)) {
+		target_company->stock_info.takeover_bidder = _current_company;
+		target_company->stock_info.takeover_defense_start = TimerGameEconomy::date;
+		target_company->stock_info.takeover_defense_active = true;
+
+		/* Announce takeover attempt. */
+		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_TAKEOVER_DEFENSE, target, _current_company),
+			NewsType::Economy, NewsStyle::Normal, {});
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
+	}
+
+	return CommandCost();
+}
+
+/**
+ * Execute (complete) a hostile takeover after the defense period has elapsed.
+ * @param flags DoCommandFlags.
+ * @param target Company to take over.
+ * @return The cost of this operation or an error.
+ */
+CommandCost CmdExecuteTakeover(DoCommandFlags flags, CompanyID target)
+{
+	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
+
+	Company *target_company = Company::GetIfValid(target);
+	if (target_company == nullptr) return CMD_ERROR;
+
+	if (!target_company->stock_info.takeover_defense_active) {
+		return CommandCost(STR_ERROR_STOCK_NO_TAKEOVER);
+	}
+	if (target_company->stock_info.takeover_bidder != _current_company) {
+		return CommandCost(STR_ERROR_STOCK_NOT_YOUR_TAKEOVER);
+	}
+
+	/* Check defense period elapsed. */
+	auto days_elapsed = TimerGameEconomy::date - target_company->stock_info.takeover_defense_start;
+	if (days_elapsed < TAKEOVER_DEFENSE_DAYS) {
+		return CommandCost(STR_ERROR_STOCK_DEFENSE_PERIOD);
+	}
+
+	/* Re-verify ownership still >= threshold. */
+	const StockHolding *holding = target_company->stock_info.FindHolder(_current_company);
+	if (holding == nullptr) return CommandCost(STR_ERROR_STOCK_INSUFFICIENT_OWNERSHIP);
+
+	uint16_t ownership_percent = 0;
+	if (target_company->stock_info.total_issued > 0) {
+		ownership_percent = static_cast<uint16_t>(static_cast<uint32_t>(holding->units) * 100 / target_company->stock_info.total_issued);
+	}
+	if (ownership_percent < TAKEOVER_THRESHOLD_PERCENT) {
+		return CommandCost(STR_ERROR_STOCK_INSUFFICIENT_OWNERSHIP);
+	}
+
+	if (flags.Test(DoCommandFlag::Execute)) {
+		/* Remove all orders for target. */
+		_stock_order_book.RemoveOrdersForCompany(target);
+
+		/* Pay minority shareholders at current share price. */
+		Money share_price = target_company->stock_info.share_price;
+		Company *acquirer = Company::GetIfValid(_current_company);
+
+		for (auto &h : target_company->stock_info.holders) {
+			if (h.owner == _current_company) continue; /* Skip acquirer's own shares. */
+
+			Company *minority = Company::GetIfValid(h.owner);
+			if (minority != nullptr && h.units > 0) {
+				Money payout = share_price * h.units;
+				minority->money += payout;
+				minority->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payout;
+
+				if (acquirer != nullptr) {
+					acquirer->money -= payout;
+					acquirer->yearly_expenses[0][EXPENSES_STOCK_PURCHASE] -= payout;
+				}
+			}
+		}
+
+		/* Transfer target money to acquirer. */
+		if (acquirer != nullptr) {
+			acquirer->money += target_company->money;
+		}
+
+		/* Announce takeover. */
+		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_TAKEOVER, target, _current_company),
+			NewsType::Economy, NewsStyle::Normal, {});
+
+		/* Delete target company. */
+		Command<Commands::CompanyControl>::Post(CompanyCtrlAction::Delete, target, CompanyRemoveReason::Manual, INVALID_CLIENT_ID);
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
+	}
+
+	return CommandCost();
 }
 
 /** Timer for quarterly stock price updates. */
@@ -622,4 +915,19 @@ static const IntervalTimer<TimerGameEconomy> _update_stock_prices({TimerGameEcon
 /** Timer for yearly dividend payments. */
 static const IntervalTimer<TimerGameEconomy> _pay_annual_dividends({TimerGameEconomy::Trigger::Year, TimerGameEconomy::Priority::None}, [](auto) {
 	PayAnnualDividends();
+});
+
+/** Timer for daily takeover defense cleanup (if bidder went bankrupt). */
+static const IntervalTimer<TimerGameEconomy> _takeover_cleanup({TimerGameEconomy::Trigger::Day, TimerGameEconomy::Priority::None}, [](auto) {
+	if (!_settings_game.economy.stock_market) return;
+
+	for (Company *c : Company::Iterate()) {
+		if (!c->stock_info.takeover_defense_active) continue;
+
+		/* If the bidder no longer exists, cancel the takeover. */
+		if (!Company::IsValidID(c->stock_info.takeover_bidder)) {
+			c->stock_info.takeover_defense_active = false;
+			c->stock_info.takeover_bidder = CompanyID::Invalid();
+		}
+	}
 });

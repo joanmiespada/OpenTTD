@@ -19,12 +19,18 @@ CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t u
 CommandCost CmdCancelSellOrder(DoCommandFlags flags, StockOrderID order_id);
 CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16_t units);
 CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_price);
+CommandCost CmdPlaceBuyOrder(DoCommandFlags flags, CompanyID target, uint16_t units, Money bid_price);
+CommandCost CmdInitiateTakeover(DoCommandFlags flags, CompanyID target);
+CommandCost CmdExecuteTakeover(DoCommandFlags flags, CompanyID target);
 
 DEF_CMD_TRAIT(Commands::ListCompanyStock, CmdListCompanyStock, {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::PlaceSellOrder,   CmdPlaceSellOrder,   {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::CancelSellOrder,  CmdCancelSellOrder,  {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::FillSellOrder,    CmdFillSellOrder,    {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::BuybackStock,     CmdBuybackStock,     {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::PlaceBuyOrder,     CmdPlaceBuyOrder,     {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::InitiateTakeover,  CmdInitiateTakeover,  {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::ExecuteTakeover,   CmdExecuteTakeover,   {}, CommandType::MoneyManagement)
 
 Money CalculateStockBaseValue(const struct Company *c);
 void UpdateStockPrices();

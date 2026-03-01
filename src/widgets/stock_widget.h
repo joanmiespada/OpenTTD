@@ -32,6 +32,7 @@ enum StockMarketWidgets : WidgetID {
 	WID_STM_SCROLLBAR,            ///< Scrollbar for the company list.
 	WID_STM_BUY_BUTTON,          ///< Buy shares button.
 	WID_STM_SELL_BUTTON,          ///< Sell shares button.
+	WID_STM_PRICE_GRAPH_BUTTON,   ///< Button to show stock price history graph.
 };
 
 #endif /* WIDGETS_STOCK_WIDGET_H */
