@@ -726,6 +726,14 @@ STR_STOCK_MARKET_SELL_QUERY                                     :Enter the numbe
 STR_STOCK_SHOW_PRICE_GRAPH                                      :{BLACK}Price Graph
 STR_STOCK_SHOW_PRICE_GRAPH_TOOLTIP                              :{BLACK}Show stock price history graph
 
+# Order book section
+STR_STOCK_ORDER_BOOK_CAPTION                                    :{BLACK}Order Book
+STR_STOCK_ORDER_BOOK_BID_HEADER                                 :{GREEN}Bids (Buy)
+STR_STOCK_ORDER_BOOK_ASK_HEADER                                 :{RED}Asks (Sell)
+STR_STOCK_ORDER_BOOK_ENTRY_BID                                  :{GREEN}{CURRENCY_LONG} x {COMMA}
+STR_STOCK_ORDER_BOOK_ENTRY_ASK                                  :{RED}{CURRENCY_LONG} x {COMMA}
+STR_STOCK_ORDER_BOOK_EMPTY                                      :{BLACK}No orders
+
 STR_ERROR_STOCK_MARKET_DISABLED                                 :{WHITE}Stock marketplace is disabled
 STR_ERROR_STOCK_NOT_LISTED                                      :{WHITE}This company has not issued stock
 STR_ERROR_STOCK_TOO_MANY_SHARES                                 :{WHITE}Cannot issue more stock... maximum issuance reached
@@ -1652,6 +1660,8 @@ STR_CONFIG_SETTING_CARGO_SCALE_VALUE                            :{NUM}%
 
 STR_CONFIG_SETTING_STOCK_MARKET                                 :Enable stock marketplace: {STRING2}
 STR_CONFIG_SETTING_STOCK_MARKET_HELPTEXT                        :When enabled, companies can issue stock on the marketplace for other companies to buy and sell. Dividends are paid yearly based on company performance
+STR_CONFIG_SETTING_STOCK_MARKET_MAKER                           :Enable stock market maker: {STRING2}
+STR_CONFIG_SETTING_STOCK_MARKET_MAKER_HELPTEXT                  :When enabled, an automated market maker places small buy and sell orders near the fair value of each listed company, providing baseline liquidity and realistic price movement
 STR_CONFIG_SETTING_STOCK_MAX_ISSUE                              :Maximum stock issuance: {STRING2}
 STR_CONFIG_SETTING_STOCK_MAX_ISSUE_HELPTEXT                     :Maximum percentage of company value that can be issued as stock
 STR_CONFIG_SETTING_STOCK_DIVIDEND_RATE                          :Dividend rate: {STRING2}

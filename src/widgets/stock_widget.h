@@ -30,6 +30,12 @@ enum StockMarketWidgets : WidgetID {
 	WID_STM_MARKET_LABEL,         ///< Label for the market section.
 	WID_STM_COMPANY_LIST,         ///< Scrollable list of listed companies.
 	WID_STM_SCROLLBAR,            ///< Scrollbar for the company list.
+
+	/* Order book panel */
+	WID_STM_ORDER_BOOK_HEADER,    ///< Header label for the order book section.
+	WID_STM_ORDER_BOOK_PANEL,     ///< Panel displaying bid/ask depth for the selected company.
+	WID_STM_ORDER_BOOK_SCROLLBAR, ///< Scrollbar for the order book panel.
+
 	WID_STM_BUY_BUTTON,          ///< Buy shares button.
 	WID_STM_SELL_BUTTON,          ///< Sell shares button.
 	WID_STM_PRICE_GRAPH_BUTTON,   ///< Button to show stock price history graph.

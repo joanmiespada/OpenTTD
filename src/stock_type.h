@@ -51,13 +51,14 @@ enum class StockOrderSide : uint8_t {
 /** Represents a sell order on the stock market order book. */
 struct StockOrder {
 	StockOrderID order_id = INVALID_STOCK_ORDER_ID; ///< Unique order identifier.
-	CompanyID seller;       ///< Company placing the sell order.
+	CompanyID seller;       ///< Company placing the sell order (use CompanyID::Invalid() for market maker).
 	CompanyID target;       ///< Company whose stock is being sold.
 	uint16_t units = 0;    ///< Total units offered for sale.
 	uint16_t units_filled = 0; ///< Units already purchased by buyers.
 	Money ask_price = 0;   ///< Price per unit requested by seller.
 	TimerGameEconomy::Date creation_date{}; ///< Date the order was placed.
 	StockOrderSide side = StockOrderSide::Sell; ///< Whether this is a buy or sell order.
+	bool is_market_maker = false; ///< Whether this order was placed by the automated market maker.
 
 	/** Check if this is a buy order. */
 	bool IsBuyOrder() const { return this->side == StockOrderSide::Buy; }

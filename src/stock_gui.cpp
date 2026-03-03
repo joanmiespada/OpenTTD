@@ -39,6 +39,7 @@ private:
 	Scrollbar *market_vscroll = nullptr;         ///< Scrollbar for market company list.
 	Scrollbar *shareholders_vscroll = nullptr;   ///< Scrollbar for shareholders list.
 	Scrollbar *investments_vscroll = nullptr;    ///< Scrollbar for investments list.
+	Scrollbar *order_book_vscroll = nullptr;     ///< Scrollbar for the order book panel.
 	int line_height = 0;                         ///< Height of a single row.
 	Dimension icon{};                            ///< Size of a company icon sprite.
 	int col_company_width = 0;                   ///< Width of company name column.
@@ -132,6 +133,7 @@ public:
 		this->market_vscroll = this->GetScrollbar(WID_STM_SCROLLBAR);
 		this->shareholders_vscroll = this->GetScrollbar(WID_STM_SHAREHOLDERS_SCROLLBAR);
 		this->investments_vscroll = this->GetScrollbar(WID_STM_INVESTMENTS_SCROLLBAR);
+		this->order_book_vscroll = this->GetScrollbar(WID_STM_ORDER_BOOK_SCROLLBAR);
 		this->FinishInitNested(window_number);
 
 		this->market_companies.ForceRebuild();
@@ -160,6 +162,26 @@ public:
 		/* Disable My Company buttons based on state. */
 		this->SetWidgetDisabledState(WID_STM_ISSUE_SHARES, my == nullptr);
 		this->SetWidgetDisabledState(WID_STM_BUYBACK_SHARES, !is_listed);
+
+		/* Count orders for the order book scrollbar.
+		 * The panel shows bids and asks side by side, so the number of scrollable
+		 * rows equals the larger of the two sides. */
+		{
+			int bid_count = 0;
+			int ask_count = 0;
+			if (this->selected_company != CompanyID::Invalid()) {
+				for (const auto &order : _stock_order_book.orders) {
+					if (order.target != this->selected_company) continue;
+					if (order.GetRemainingUnits() == 0) continue;
+					if (order.IsBuyOrder()) {
+						bid_count++;
+					} else {
+						ask_count++;
+					}
+				}
+			}
+			this->order_book_vscroll->SetCount(std::max(bid_count, ask_count));
+		}
 
 		/* Disable buy/sell buttons if no selection or own company selected. */
 		bool no_selection = this->selected_company == CompanyID::Invalid();
@@ -190,6 +212,10 @@ public:
 
 			case WID_STM_COMPANY_LIST:
 				this->DrawMarketList(r);
+				break;
+
+			case WID_STM_ORDER_BOOK_PANEL:
+				this->DrawOrderBook(r);
 				break;
 		}
 	}
@@ -356,6 +382,80 @@ public:
 		}
 	}
 
+	/**
+	 * Draw the order book panel for the selected company.
+	 * Shows buy orders (bids) on the left, sell orders (asks) on the right.
+	 * Bids are sorted highest price first; asks are sorted lowest price first.
+	 * @param r The bounding rectangle of the panel widget.
+	 */
+	void DrawOrderBook(const Rect &r) const
+	{
+		Rect ir = r.Shrink(WidgetDimensions::scaled.framerect);
+		int char_height = GetCharacterHeight(FS_NORMAL);
+		int text_y_offset = (this->line_height - char_height) / 2;
+		int mid = (ir.left + ir.right) / 2;
+
+		/* Header row */
+		DrawString(ir.left, mid - WidgetDimensions::scaled.hsep_normal, ir.top + text_y_offset, STR_STOCK_ORDER_BOOK_BID_HEADER);
+		DrawString(mid + WidgetDimensions::scaled.hsep_normal, ir.right, ir.top + text_y_offset, STR_STOCK_ORDER_BOOK_ASK_HEADER);
+		ir.top += this->line_height;
+
+		if (this->selected_company == CompanyID::Invalid()) {
+			DrawString(ir.left, ir.right, ir.top + text_y_offset, STR_STOCK_ORDER_BOOK_EMPTY, TC_BLACK, SA_HOR_CENTER);
+			return;
+		}
+
+		/* Collect and split orders for the selected company. */
+		std::vector<const StockOrder *> bids;
+		std::vector<const StockOrder *> asks;
+		for (const auto &order : _stock_order_book.orders) {
+			if (order.target != this->selected_company) continue;
+			if (order.GetRemainingUnits() == 0) continue;
+			if (order.IsBuyOrder()) {
+				bids.push_back(&order);
+			} else {
+				asks.push_back(&order);
+			}
+		}
+
+		/* Sort: bids highest price first, asks lowest price first. */
+		std::sort(bids.begin(), bids.end(), [](const StockOrder *a, const StockOrder *b) {
+			return a->ask_price > b->ask_price;
+		});
+		std::sort(asks.begin(), asks.end(), [](const StockOrder *a, const StockOrder *b) {
+			return a->ask_price < b->ask_price;
+		});
+
+		/* Determine visible row range via scrollbar. */
+		int total_rows = static_cast<int>(std::max(bids.size(), asks.size()));
+		if (total_rows == 0) {
+			DrawString(ir.left, ir.right, ir.top + text_y_offset, STR_STOCK_ORDER_BOOK_EMPTY, TC_BLACK, SA_HOR_CENTER);
+			return;
+		}
+
+		int pos = this->order_book_vscroll->GetPosition();
+		int capacity = this->order_book_vscroll->GetCapacity();
+		int max_row = std::min(pos + capacity, total_rows);
+
+		for (int i = pos; i < max_row; i++) {
+			/* Left half: bid entry */
+			if (i < static_cast<int>(bids.size())) {
+				const StockOrder *bid = bids[i];
+				DrawString(ir.left, mid - WidgetDimensions::scaled.hsep_normal, ir.top + text_y_offset,
+					GetString(STR_STOCK_ORDER_BOOK_ENTRY_BID, bid->ask_price, bid->GetRemainingUnits()));
+			}
+
+			/* Right half: ask entry */
+			if (i < static_cast<int>(asks.size())) {
+				const StockOrder *ask = asks[i];
+				DrawString(mid + WidgetDimensions::scaled.hsep_normal, ir.right, ir.top + text_y_offset,
+					GetString(STR_STOCK_ORDER_BOOK_ENTRY_ASK, ask->ask_price, ask->GetRemainingUnits()));
+			}
+
+			ir.top += this->line_height;
+		}
+	}
+
 	void UpdateWidgetSize(WidgetID widget, Dimension &size, [[maybe_unused]] const Dimension &padding, [[maybe_unused]] Dimension &fill, [[maybe_unused]] Dimension &resize) override
 	{
 		switch (widget) {
@@ -402,6 +502,12 @@ public:
 				size.width = std::max(size.width, (uint)(this->col_company_width + data_cols_width + WidgetDimensions::scaled.framerect.Horizontal()));
 				break;
 			}
+
+			case WID_STM_ORDER_BOOK_PANEL:
+				/* Header row + 4 data rows visible by default; scrollable to show more. */
+				size.height = this->line_height * 5 + WidgetDimensions::scaled.framerect.Vertical();
+				resize.height = this->line_height;
+				break;
 		}
 	}
 
@@ -655,6 +761,19 @@ static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets
 		EndContainer(),
 		NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_STM_SCROLLBAR),
 	EndContainer(),
+
+	/* Order book panel. */
+	NWidget(WWT_PANEL, COLOUR_BROWN),
+		NWidget(NWID_VERTICAL), SetPadding(WidgetDimensions::unscaled.framerect),
+			NWidget(WWT_TEXT, INVALID_COLOUR, WID_STM_ORDER_BOOK_HEADER), SetStringTip(STR_STOCK_ORDER_BOOK_CAPTION), SetFill(1, 0),
+		EndContainer(),
+	EndContainer(),
+	NWidget(NWID_HORIZONTAL),
+		NWidget(WWT_PANEL, COLOUR_BROWN, WID_STM_ORDER_BOOK_PANEL), SetMinimalSize(600, 60), SetResize(0, 10), SetScrollbar(WID_STM_ORDER_BOOK_SCROLLBAR),
+		EndContainer(),
+		NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_STM_ORDER_BOOK_SCROLLBAR),
+	EndContainer(),
+
 	NWidget(NWID_HORIZONTAL, NWidContainerFlag::EqualSize),
 		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_BUY_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_MARKET_BUY, STR_STOCK_MARKET_BUY_TOOLTIP),
 		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_SELL_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_MARKET_SELL, STR_STOCK_MARKET_SELL_TOOLTIP),

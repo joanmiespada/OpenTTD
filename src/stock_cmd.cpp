@@ -32,6 +32,8 @@ StockOrderBook _stock_order_book;
 
 /**
  * Find an order by its ID.
+ * Linear search is acceptable here: FindOrder() is only called from user-initiated
+ * commands (cancel, fill, buyback) where at most one lookup per command is needed.
  * @param id The order ID to find.
  * @return Pointer to the order, or nullptr if not found.
  */
@@ -69,6 +71,8 @@ void StockOrderBook::RemoveFilledOrders()
 
 /**
  * Count the number of active orders placed by a specific seller.
+ * Linear scan is acceptable here: this is a validation check called at most once
+ * per user-initiated place-order command, not in any hot game-loop path.
  * @param seller The company to count orders for.
  * @return Number of active orders by this seller.
  */
@@ -85,6 +89,7 @@ uint16_t StockOrderBook::CountOrdersBySeller(CompanyID seller) const
  * Remove all orders involving a specific company (as seller or target).
  * When the removed company is the target, escrowed shares are worthless and simply discarded.
  * When the removed company is the seller, their orders are removed.
+ * Market maker orders targeting the removed company are also cleaned up.
  * @param company The company being removed.
  */
 void StockOrderBook::RemoveOrdersForCompany(CompanyID company)
@@ -98,66 +103,115 @@ void StockOrderBook::RemoveOrdersForCompany(CompanyID company)
 /**
  * Match buy and sell orders for a given target company.
  * Executes trades when a buy order's bid price >= a sell order's ask price.
+ *
+ * Builds sorted pointer views of buy/sell orders once (O(n log n)), then uses a
+ * two-pointer sweep (O(n)) instead of the previous O(n^2) repeated linear scans.
+ * The underlying this->orders vector is not reordered; only temporary pointer
+ * vectors are sorted so that saveload compatibility is unaffected.
+ *
  * @param target The company whose stock orders to match.
  */
 void StockOrderBook::MatchOrders(CompanyID target)
 {
-	bool matched = true;
-	while (matched) {
-		matched = false;
-		StockOrder *best_buy = nullptr;
-		StockOrder *best_sell = nullptr;
+	/* Always clean up filled orders, even if the target company is invalid. */
+	this->RemoveFilledOrders();
 
-		for (auto &order : this->orders) {
-			if (order.target != target || order.IsFilled()) continue;
-			if (order.IsBuyOrder()) {
-				if (best_buy == nullptr || order.ask_price > best_buy->ask_price) best_buy = &order;
-			} else {
-				if (best_sell == nullptr || order.ask_price < best_sell->ask_price) best_sell = &order;
-			}
+	Company *target_co = Company::GetIfValid(target);
+	if (target_co == nullptr) return;
+
+	/* Collect pointers to all unfilled buy and sell orders for this target.
+	 * One O(n) pass over the full order book. */
+	std::vector<StockOrder *> buys;
+	std::vector<StockOrder *> sells;
+	for (auto &order : this->orders) {
+		if (order.target != target || order.IsFilled()) continue;
+		if (order.IsBuyOrder()) {
+			buys.push_back(&order);
+		} else {
+			sells.push_back(&order);
 		}
+	}
 
-		if (best_buy == nullptr || best_sell == nullptr) break;
+	/* Sort buys descending by bid price (highest bid first). */
+	std::sort(buys.begin(), buys.end(), [](const StockOrder *a, const StockOrder *b) {
+		return a->ask_price > b->ask_price;
+	});
+	/* Sort sells ascending by ask price (lowest ask first). */
+	std::sort(sells.begin(), sells.end(), [](const StockOrder *a, const StockOrder *b) {
+		return a->ask_price < b->ask_price;
+	});
+
+	/* Two-pointer sweep: advance bi when the buy is consumed, si when the sell is consumed.
+	 * When the same company owns both sides, advance si to find a different counterparty
+	 * rather than breaking immediately (previous code broke out of the loop entirely on this
+	 * condition, which could miss valid matches with other sellers at the same price level). */
+	size_t bi = 0;
+	size_t si = 0;
+	while (bi < buys.size() && si < sells.size()) {
+		StockOrder *best_buy = buys[bi];
+		StockOrder *best_sell = sells[si];
+
+		/* Skip stale pointers invalidated by partial fills earlier in this sweep. */
+		if (best_buy->IsFilled()) { bi++; continue; }
+		if (best_sell->IsFilled()) { si++; continue; }
+
+		/* Sorted invariant: once the best bid < best ask, no further match is possible. */
 		if (best_buy->ask_price < best_sell->ask_price) break;
-		if (best_buy->seller == best_sell->seller) break;
 
+		/* Self-trade prevention: skip this sell and try the next one at the same or
+		 * higher ask.  The buy order remains at bi so it can match a different seller. */
+		if (best_buy->seller == best_sell->seller) { si++; continue; }
+
+		/* Execute the trade at the sell (ask) price. */
 		Money trade_price = best_sell->ask_price;
 		uint16_t trade_units = std::min(best_buy->GetRemainingUnits(), best_sell->GetRemainingUnits());
 
-		Company *target_co = Company::GetIfValid(target);
-		if (target_co == nullptr) break;
-
-		/* Transfer shares to buyer. */
-		StockHolding *buyer_holding = target_co->stock_info.FindHolder(best_buy->seller);
-		if (buyer_holding != nullptr) {
-			Money old_total = buyer_holding->purchase_price * buyer_holding->units;
-			buyer_holding->units += trade_units;
-			buyer_holding->purchase_price = (old_total + trade_price * trade_units) / buyer_holding->units;
-		} else {
-			target_co->stock_info.holders.push_back({best_buy->seller, trade_units, trade_price});
+		/* Transfer shares to buyer.
+		 * Market maker buy orders represent synthetic demand: shares are absorbed
+		 * and removed from circulation rather than transferred to a real holder. */
+		if (!best_buy->is_market_maker) {
+			StockHolding *buyer_holding = target_co->stock_info.FindHolder(best_buy->seller);
+			if (buyer_holding != nullptr) {
+				Money old_total = buyer_holding->purchase_price * buyer_holding->units;
+				buyer_holding->units += trade_units;
+				buyer_holding->purchase_price = (old_total + trade_price * trade_units) / buyer_holding->units;
+			} else {
+				target_co->stock_info.holders.push_back({best_buy->seller, trade_units, trade_price});
+			}
 		}
 
-		/* Pay seller. */
-		Money payment = trade_price * trade_units;
-		Company *seller_co = Company::GetIfValid(best_sell->seller);
-		if (seller_co != nullptr) {
-			seller_co->money += payment;
-			seller_co->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
+		/* Pay seller.
+		 * Market maker sell orders represent synthetic supply: payment goes nowhere
+		 * (the shares are created synthetically and the money simply disappears). */
+		if (!best_sell->is_market_maker) {
+			Money payment = trade_price * trade_units;
+			Company *seller_co = Company::GetIfValid(best_sell->seller);
+			if (seller_co != nullptr) {
+				seller_co->money += payment;
+				seller_co->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
+			}
 		}
 
-		/* Refund overpayment to buyer. */
-		Money refund = (best_buy->ask_price - trade_price) * trade_units;
-		Company *buyer_co = Company::GetIfValid(best_buy->seller);
-		if (buyer_co != nullptr && refund > 0) {
-			buyer_co->money += refund;
-			buyer_co->yearly_expenses[0][EXPENSES_STOCK_PURCHASE] += refund;
+		/* Refund overpayment (bid - ask) to buyer.
+		 * Market maker buy orders have no real buyer to refund. */
+		if (!best_buy->is_market_maker) {
+			Money refund = (best_buy->ask_price - trade_price) * trade_units;
+			Company *buyer_co = Company::GetIfValid(best_buy->seller);
+			if (buyer_co != nullptr && refund > 0) {
+				buyer_co->money += refund;
+				buyer_co->yearly_expenses[0][EXPENSES_STOCK_PURCHASE] += refund;
+			}
 		}
 
 		best_buy->units_filled += trade_units;
 		best_sell->units_filled += trade_units;
 		target_co->stock_info.share_price = trade_price;
-		matched = true;
+
+		/* Advance whichever side was fully filled. */
+		if (best_buy->IsFilled()) bi++;
+		if (best_sell->IsFilled()) si++;
 	}
+
 	this->RemoveFilledOrders();
 }
 
@@ -253,13 +307,15 @@ void PayAnnualDividends()
 		/* Dividend pool = net profit * dividend rate / 100 */
 		Money dividend_pool = total_profit * _settings_game.economy.stock_dividend_rate / 100;
 
-		/* Count all outstanding units: held by investors + escrowed in sell orders (excl. IPO orders).
-		 * IPO orders (seller == target) represent unsold newly issued stock; they don't earn dividends. */
+		/* Count all outstanding units: held by investors + escrowed in real sell orders.
+		 * IPO orders (seller == target) represent unsold newly issued stock; they don't earn dividends.
+		 * Market maker orders represent synthetic liquidity, not real ownership; they don't earn dividends. */
 		uint16_t held_units = c->stock_info.GetHeldUnits();
 		uint16_t escrowed_units = 0;
 		for (const auto &order : _stock_order_book.orders) {
 			if (order.target != c->index) continue;
 			if (order.seller == order.target) continue; /* Skip IPO orders. */
+			if (order.is_market_maker) continue;        /* Skip synthetic market maker orders. */
 			escrowed_units += order.GetRemainingUnits();
 		}
 		uint16_t total_dividend_units = held_units + escrowed_units;
@@ -298,10 +354,12 @@ void PayAnnualDividends()
 				NewsType::Economy, NewsStyle::Normal, {});
 		}
 
-		/* Pay dividends for escrowed units in sell orders back to the seller. */
+		/* Pay dividends for escrowed units in sell orders back to the seller.
+		 * Market maker orders are skipped: they represent synthetic supply, not real ownership. */
 		for (const auto &order : _stock_order_book.orders) {
 			if (order.target != c->index) continue;
 			if (order.seller == order.target) continue; /* Skip IPO orders. */
+			if (order.is_market_maker) continue;        /* Skip synthetic market maker orders. */
 			uint16_t remaining = order.GetRemainingUnits();
 			if (remaining == 0) continue;
 
@@ -907,9 +965,117 @@ CommandCost CmdExecuteTakeover(DoCommandFlags flags, CompanyID target)
 	return CommandCost();
 }
 
+/**
+ * Maximum number of market maker buy orders per listed company.
+ * Two tiers: one close to fair value, one a bit further away.
+ */
+static constexpr uint8_t MARKET_MAKER_MAX_BUY_ORDERS  = 2;
+
+/** Maximum number of market maker sell orders per listed company. */
+static constexpr uint8_t MARKET_MAKER_MAX_SELL_ORDERS = 2;
+
+/**
+ * Run the automated market maker for all listed companies.
+ *
+ * For each listed company the market maker:
+ *   1. Cancels all stale market maker orders (both buy and sell).
+ *   2. Calculates the fair value per unit from CalculateStockBaseValue().
+ *   3. Places two buy orders at 97% and 95% of fair value.
+ *   4. Places two sell orders at 103% and 105% of fair value.
+ *
+ * Order sizes are 2% of total issued units each (rounded up to at least 1),
+ * capped so that the global order book limit is not exceeded.
+ *
+ * Market maker orders use CompanyID::Invalid() as the seller field and have
+ * is_market_maker = true so MatchOrders() can handle them specially:
+ * synthetic sell orders inject liquidity (no payment on match); synthetic buy
+ * orders absorb supply (shares removed from circulation, no holding created).
+ */
+static void RunMarketMaker()
+{
+	if (!_settings_game.economy.stock_market) return;
+	if (!_settings_game.economy.stock_market_maker) return;
+
+	/* Step 1: remove all existing market maker orders from the book. */
+	_stock_order_book.orders.erase(
+		std::remove_if(_stock_order_book.orders.begin(), _stock_order_book.orders.end(),
+			[](const StockOrder &o) { return o.is_market_maker; }),
+		_stock_order_book.orders.end());
+
+	for (Company *c : Company::Iterate()) {
+		if (!c->stock_info.listed) continue;
+		if (c->stock_info.total_issued == 0) continue;
+
+		/* Step 2: calculate the fair price per unit. */
+		Money base_value = CalculateStockBaseValue(c);
+		/* Convert company base value to price per unit (same formula as CalculateFormulaPrice). */
+		Money fair_price = base_value * _settings_game.economy.stock_max_issue_percent / 10000;
+		fair_price = std::max<Money>(fair_price, 1);
+
+		/* Step 3: calculate order size (2% of total issued, at least 1 unit). */
+		uint16_t order_units = static_cast<uint16_t>(std::max<uint32_t>(1,
+			static_cast<uint32_t>(c->stock_info.total_issued) * 2 / 100));
+
+		/* Check there is still capacity in the global order book. */
+		if (_stock_order_book.orders.size() + MARKET_MAKER_MAX_BUY_ORDERS + MARKET_MAKER_MAX_SELL_ORDERS
+				> MAX_TOTAL_STOCK_ORDERS) {
+			continue;
+		}
+
+		CompanyID target = c->index;
+		TimerGameEconomy::Date now = TimerGameEconomy::date;
+
+		/* Step 4: place two buy orders below fair value (97% and 95%). */
+		static constexpr uint8_t buy_offsets[MARKET_MAKER_MAX_BUY_ORDERS]  = { 97, 95 };
+		for (uint8_t i = 0; i < MARKET_MAKER_MAX_BUY_ORDERS; i++) {
+			Money bid_price = std::max<Money>(1, fair_price * buy_offsets[i] / 100);
+
+			StockOrder order;
+			order.order_id      = _stock_order_book.next_order_id++;
+			order.seller        = CompanyID::Invalid();
+			order.target        = target;
+			order.units         = order_units;
+			order.units_filled  = 0;
+			order.ask_price     = bid_price;
+			order.creation_date = now;
+			order.side          = StockOrderSide::Buy;
+			order.is_market_maker = true;
+			_stock_order_book.orders.push_back(order);
+		}
+
+		/* Step 5: place two sell orders above fair value (103% and 105%). */
+		static constexpr uint8_t sell_offsets[MARKET_MAKER_MAX_SELL_ORDERS] = { 103, 105 };
+		for (uint8_t i = 0; i < MARKET_MAKER_MAX_SELL_ORDERS; i++) {
+			Money ask_price = std::max<Money>(1, fair_price * sell_offsets[i] / 100);
+
+			StockOrder order;
+			order.order_id      = _stock_order_book.next_order_id++;
+			order.seller        = CompanyID::Invalid();
+			order.target        = target;
+			order.units         = order_units;
+			order.units_filled  = 0;
+			order.ask_price     = ask_price;
+			order.creation_date = now;
+			order.side          = StockOrderSide::Sell;
+			order.is_market_maker = true;
+			_stock_order_book.orders.push_back(order);
+		}
+
+		/* Step 6: attempt to match the new market maker orders against existing player orders. */
+		_stock_order_book.MatchOrders(target);
+	}
+
+	InvalidateWindowClassesData(WC_STOCK_MARKET);
+}
+
 /** Timer for quarterly stock price updates. */
 static const IntervalTimer<TimerGameEconomy> _update_stock_prices({TimerGameEconomy::Trigger::Quarter, TimerGameEconomy::Priority::None}, [](auto) {
 	UpdateStockPrices();
+});
+
+/** Timer for quarterly market maker order refresh. */
+static const IntervalTimer<TimerGameEconomy> _run_market_maker({TimerGameEconomy::Trigger::Quarter, TimerGameEconomy::Priority::None}, [](auto) {
+	RunMarketMaker();
 });
 
 /** Timer for yearly dividend payments. */
