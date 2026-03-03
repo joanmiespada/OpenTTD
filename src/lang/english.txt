@@ -763,6 +763,7 @@ STR_NEWS_STOCK_LARGE_TRADE                                      :{BIG_FONT}{BLAC
 STR_NEWS_STOCK_TAKEOVER_DEFENSE                                 :{BIG_FONT}{BLACK}{COMPANY} is under hostile takeover attempt by {COMPANY}
 STR_NEWS_STOCK_TAKEOVER                                         :{BIG_FONT}{BLACK}{COMPANY} has been taken over by {COMPANY}
 STR_NEWS_STOCK_BUYBACK                                          :{BIG_FONT}{BLACK}{COMPANY} is buying back its own stock
+STR_NEWS_STOCK_ORDER_EXPIRED                                    :{BLACK}Stock orders have expired due to inactivity
 
 STR_STOCK_PLACE_BUY_ORDER                                       :{BLACK}Place Buy Order
 STR_STOCK_PLACE_BUY_ORDER_TOOLTIP                               :{BLACK}Place a standing buy order at a limit price (Ctrl+Click to buy at market price)

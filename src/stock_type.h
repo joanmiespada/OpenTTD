@@ -20,7 +20,7 @@ static constexpr uint16_t MAX_STOCK_UNITS = 1200;
 /** Each stock unit represents 0.01% of the company. */
 static constexpr uint16_t STOCK_UNIT_SCALE = 100;
 
-/** Maximum number of active sell orders per company (as seller). */
+/** Maximum number of active orders per company (as placer). */
 static constexpr uint16_t MAX_STOCK_ORDERS_PER_COMPANY = 32;
 
 /** Maximum total number of active sell orders across all companies. */
@@ -31,6 +31,9 @@ static constexpr uint8_t TAKEOVER_THRESHOLD_PERCENT = 51;
 
 /** Number of economy days the target has to defend against a takeover. */
 static constexpr uint16_t TAKEOVER_DEFENSE_DAYS = 90;
+
+/** Number of economy days before an unfilled stock order expires. */
+static constexpr uint16_t STOCK_ORDER_EXPIRY_DAYS = 180;
 
 using StockOrderID = uint32_t;
 static constexpr StockOrderID INVALID_STOCK_ORDER_ID = UINT32_MAX;
@@ -48,14 +51,14 @@ enum class StockOrderSide : uint8_t {
 	Buy  = 1, ///< Offer to buy shares.
 };
 
-/** Represents a sell order on the stock market order book. */
+/** Represents an order on the stock market order book. */
 struct StockOrder {
 	StockOrderID order_id = INVALID_STOCK_ORDER_ID; ///< Unique order identifier.
-	CompanyID seller;       ///< Company placing the sell order (use CompanyID::Invalid() for market maker).
+	CompanyID placer;       ///< Company that placed this order (use CompanyID::Invalid() for market maker).
 	CompanyID target;       ///< Company whose stock is being sold.
 	uint16_t units = 0;    ///< Total units offered for sale.
 	uint16_t units_filled = 0; ///< Units already purchased by buyers.
-	Money ask_price = 0;   ///< Price per unit requested by seller.
+	Money ask_price = 0;   ///< Price per unit (ask for sell orders, max bid for buy orders).
 	TimerGameEconomy::Date creation_date{}; ///< Date the order was placed.
 	StockOrderSide side = StockOrderSide::Sell; ///< Whether this is a buy or sell order.
 	bool is_market_maker = false; ///< Whether this order was placed by the automated market maker.
@@ -81,8 +84,9 @@ struct StockOrderBook {
 	StockOrder *FindOrder(StockOrderID id);
 	const StockOrder *FindOrder(StockOrderID id) const;
 	void RemoveFilledOrders();
-	uint16_t CountOrdersBySeller(CompanyID seller) const;
+	uint16_t CountOrdersByPlacer(CompanyID placer) const;
 	void RemoveOrdersForCompany(CompanyID company);
+	void ExpireOldOrders();
 	void MatchOrders(CompanyID target);
 };
 

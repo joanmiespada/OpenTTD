@@ -17,7 +17,7 @@
 
 static const SaveLoad _stock_order_desc[] = {
 	SLE_VAR(StockOrder, order_id,         SLE_UINT32),
-	SLE_VAR(StockOrder, seller,           SLE_UINT8),
+	SLE_VAR(StockOrder, placer,           SLE_UINT8),
 	SLE_VAR(StockOrder, target,           SLE_UINT8),
 	SLE_VAR(StockOrder, units,            SLE_UINT16),
 	SLE_VAR(StockOrder, units_filled,     SLE_UINT16),

@@ -70,25 +70,25 @@ void StockOrderBook::RemoveFilledOrders()
 }
 
 /**
- * Count the number of active orders placed by a specific seller.
+ * Count the number of active orders placed by a specific company.
  * Linear scan is acceptable here: this is a validation check called at most once
  * per user-initiated place-order command, not in any hot game-loop path.
- * @param seller The company to count orders for.
- * @return Number of active orders by this seller.
+ * @param placer The company to count orders for.
+ * @return Number of active orders by this company.
  */
-uint16_t StockOrderBook::CountOrdersBySeller(CompanyID seller) const
+uint16_t StockOrderBook::CountOrdersByPlacer(CompanyID placer) const
 {
 	uint16_t count = 0;
 	for (const auto &order : this->orders) {
-		if (order.seller == seller) count++;
+		if (order.placer == placer) count++;
 	}
 	return count;
 }
 
 /**
- * Remove all orders involving a specific company (as seller or target).
+ * Remove all orders involving a specific company (as placer or target).
  * When the removed company is the target, escrowed shares are worthless and simply discarded.
- * When the removed company is the seller, their orders are removed.
+ * When the removed company is the placer, their orders are removed.
  * Market maker orders targeting the removed company are also cleaned up.
  * @param company The company being removed.
  */
@@ -96,8 +96,86 @@ void StockOrderBook::RemoveOrdersForCompany(CompanyID company)
 {
 	this->orders.erase(
 		std::remove_if(this->orders.begin(), this->orders.end(),
-			[company](const StockOrder &o) { return o.seller == company || o.target == company; }),
+			[company](const StockOrder &o) { return o.placer == company || o.target == company; }),
 		this->orders.end());
+}
+
+/**
+ * Expire stock orders that have been unfilled for too long.
+ *
+ * Market maker orders are never expired: they are refreshed quarterly by RunMarketMaker().
+ * For all other orders older than STOCK_ORDER_EXPIRY_DAYS:
+ *   - Buy orders: the escrowed money is refunded to the buyer.
+ *   - Sell orders (placer != target): the escrowed shares are returned to the placer's holding.
+ *   - IPO orders (placer == target): the unissued units are removed from total_issued;
+ *     if total_issued reaches zero the company is delisted.
+ * A single news item is published when at least one order is removed.
+ */
+void StockOrderBook::ExpireOldOrders()
+{
+	bool any_expired = false;
+
+	for (auto &order : this->orders) {
+		/* Market maker orders are refreshed quarterly — never expire them here. */
+		if (order.is_market_maker) continue;
+
+		/* Check whether this order has exceeded the TTL. */
+		auto age = TimerGameEconomy::date - order.creation_date;
+		if (age < STOCK_ORDER_EXPIRY_DAYS) continue;
+
+		any_expired = true;
+		uint16_t remaining = order.GetRemainingUnits();
+
+		if (order.IsBuyOrder()) {
+			/* Refund the escrowed money to the buyer. */
+			if (remaining > 0) {
+				Company *buyer = Company::GetIfValid(order.placer);
+				if (buyer != nullptr) {
+					Money refund = order.ask_price * remaining;
+					buyer->money += refund;
+					buyer->yearly_expenses[0][EXPENSES_STOCK_PURCHASE] += refund;
+				}
+			}
+		} else if (order.placer == order.target) {
+			/* IPO order: return units to unissued pool. */
+			if (remaining > 0) {
+				Company *issuer = Company::GetIfValid(order.target);
+				if (issuer != nullptr) {
+					issuer->stock_info.total_issued -= remaining;
+					if (issuer->stock_info.total_issued == 0) {
+						issuer->stock_info.listed = false;
+					}
+				}
+			}
+		} else {
+			/* Regular sell order: return escrowed shares to the placer's holding. */
+			if (remaining > 0) {
+				Company *target_company = Company::GetIfValid(order.target);
+				if (target_company != nullptr) {
+					StockHolding *holding = target_company->stock_info.FindHolder(order.placer);
+					if (holding != nullptr) {
+						holding->units += remaining;
+					} else {
+						target_company->stock_info.holders.push_back({order.placer, remaining, order.ask_price});
+					}
+				}
+			}
+		}
+	}
+
+	/* Erase all expired non-market-maker orders in a single pass. */
+	this->orders.erase(
+		std::remove_if(this->orders.begin(), this->orders.end(),
+			[](const StockOrder &o) {
+				if (o.is_market_maker) return false;
+				return (TimerGameEconomy::date - o.creation_date) >= STOCK_ORDER_EXPIRY_DAYS;
+			}),
+		this->orders.end());
+
+	if (any_expired) {
+		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_ORDER_EXPIRED),
+			NewsType::Economy, NewsStyle::Normal, {});
+	}
 }
 
 /**
@@ -159,8 +237,8 @@ void StockOrderBook::MatchOrders(CompanyID target)
 		if (best_buy->ask_price < best_sell->ask_price) break;
 
 		/* Self-trade prevention: skip this sell and try the next one at the same or
-		 * higher ask.  The buy order remains at bi so it can match a different seller. */
-		if (best_buy->seller == best_sell->seller) { si++; continue; }
+		 * higher ask.  The buy order remains at bi so it can match a different counterparty. */
+		if (best_buy->placer == best_sell->placer) { si++; continue; }
 
 		/* Execute the trade at the sell (ask) price. */
 		Money trade_price = best_sell->ask_price;
@@ -170,22 +248,22 @@ void StockOrderBook::MatchOrders(CompanyID target)
 		 * Market maker buy orders represent synthetic demand: shares are absorbed
 		 * and removed from circulation rather than transferred to a real holder. */
 		if (!best_buy->is_market_maker) {
-			StockHolding *buyer_holding = target_co->stock_info.FindHolder(best_buy->seller);
+			StockHolding *buyer_holding = target_co->stock_info.FindHolder(best_buy->placer);
 			if (buyer_holding != nullptr) {
 				Money old_total = buyer_holding->purchase_price * buyer_holding->units;
 				buyer_holding->units += trade_units;
 				buyer_holding->purchase_price = (old_total + trade_price * trade_units) / buyer_holding->units;
 			} else {
-				target_co->stock_info.holders.push_back({best_buy->seller, trade_units, trade_price});
+				target_co->stock_info.holders.push_back({best_buy->placer, trade_units, trade_price});
 			}
 		}
 
-		/* Pay seller.
+		/* Pay the sell-side placer.
 		 * Market maker sell orders represent synthetic supply: payment goes nowhere
 		 * (the shares are created synthetically and the money simply disappears). */
 		if (!best_sell->is_market_maker) {
 			Money payment = trade_price * trade_units;
-			Company *seller_co = Company::GetIfValid(best_sell->seller);
+			Company *seller_co = Company::GetIfValid(best_sell->placer);
 			if (seller_co != nullptr) {
 				seller_co->money += payment;
 				seller_co->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
@@ -196,7 +274,7 @@ void StockOrderBook::MatchOrders(CompanyID target)
 		 * Market maker buy orders have no real buyer to refund. */
 		if (!best_buy->is_market_maker) {
 			Money refund = (best_buy->ask_price - trade_price) * trade_units;
-			Company *buyer_co = Company::GetIfValid(best_buy->seller);
+			Company *buyer_co = Company::GetIfValid(best_buy->placer);
 			if (buyer_co != nullptr && refund > 0) {
 				buyer_co->money += refund;
 				buyer_co->yearly_expenses[0][EXPENSES_STOCK_PURCHASE] += refund;
@@ -308,13 +386,13 @@ void PayAnnualDividends()
 		Money dividend_pool = total_profit * _settings_game.economy.stock_dividend_rate / 100;
 
 		/* Count all outstanding units: held by investors + escrowed in real sell orders.
-		 * IPO orders (seller == target) represent unsold newly issued stock; they don't earn dividends.
+		 * IPO orders (placer == target) represent unsold newly issued stock; they don't earn dividends.
 		 * Market maker orders represent synthetic liquidity, not real ownership; they don't earn dividends. */
 		uint16_t held_units = c->stock_info.GetHeldUnits();
 		uint16_t escrowed_units = 0;
 		for (const auto &order : _stock_order_book.orders) {
 			if (order.target != c->index) continue;
-			if (order.seller == order.target) continue; /* Skip IPO orders. */
+			if (order.placer == order.target) continue; /* Skip IPO orders. */
 			if (order.is_market_maker) continue;        /* Skip synthetic market maker orders. */
 			escrowed_units += order.GetRemainingUnits();
 		}
@@ -354,16 +432,16 @@ void PayAnnualDividends()
 				NewsType::Economy, NewsStyle::Normal, {});
 		}
 
-		/* Pay dividends for escrowed units in sell orders back to the seller.
+		/* Pay dividends for escrowed units in sell orders back to the placer.
 		 * Market maker orders are skipped: they represent synthetic supply, not real ownership. */
 		for (const auto &order : _stock_order_book.orders) {
 			if (order.target != c->index) continue;
-			if (order.seller == order.target) continue; /* Skip IPO orders. */
+			if (order.placer == order.target) continue; /* Skip IPO orders. */
 			if (order.is_market_maker) continue;        /* Skip synthetic market maker orders. */
 			uint16_t remaining = order.GetRemainingUnits();
 			if (remaining == 0) continue;
 
-			Company *seller_company = Company::GetIfValid(order.seller);
+			Company *seller_company = Company::GetIfValid(order.placer);
 			if (seller_company == nullptr) continue;
 
 			Money payment = remaining * dividend_per_unit;
@@ -421,10 +499,10 @@ CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue, M
 		c->stock_info.total_issued += units_to_issue;
 		c->stock_info.share_price = price_per_unit;
 
-		/* Create a sell order in the order book with the company as seller. */
+		/* Create a sell order in the order book with the company as placer. */
 		StockOrder order;
 		order.order_id = _stock_order_book.next_order_id++;
-		order.seller = _current_company;
+		order.placer = _current_company;
 		order.target = _current_company;
 		order.units = units_to_issue;
 		order.units_filled = 0;
@@ -462,12 +540,12 @@ CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t u
 	if (ask_price <= 0) return CMD_ERROR;
 	if (_current_company == target) return CommandCost(STR_ERROR_STOCK_CANNOT_PLACE_ORDER);
 
-	/* Check seller holds enough units */
+	/* Check placer holds enough units */
 	StockHolding *holding = target_company->stock_info.FindHolder(_current_company);
 	if (holding == nullptr || holding->units < units) return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_HOLDINGS);
 
 	/* Check order limits */
-	if (_stock_order_book.CountOrdersBySeller(_current_company) >= MAX_STOCK_ORDERS_PER_COMPANY) {
+	if (_stock_order_book.CountOrdersByPlacer(_current_company) >= MAX_STOCK_ORDERS_PER_COMPANY) {
 		return CommandCost(STR_ERROR_STOCK_TOO_MANY_ORDERS);
 	}
 	if (_stock_order_book.orders.size() >= MAX_TOTAL_STOCK_ORDERS) {
@@ -475,7 +553,7 @@ CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t u
 	}
 
 	if (flags.Test(DoCommandFlag::Execute)) {
-		/* Escrow: deduct units from seller's holding. */
+		/* Escrow: deduct units from placer's holding. */
 		holding->units -= units;
 		if (holding->units == 0) {
 			auto &holders = target_company->stock_info.holders;
@@ -486,7 +564,7 @@ CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t u
 		/* Create the sell order. */
 		StockOrder order;
 		order.order_id = _stock_order_book.next_order_id++;
-		order.seller = _current_company;
+		order.placer = _current_company;
 		order.target = target;
 		order.units = units;
 		order.units_filled = 0;
@@ -516,7 +594,7 @@ CommandCost CmdCancelSellOrder(DoCommandFlags flags, StockOrderID order_id)
 	StockOrder *order = _stock_order_book.FindOrder(order_id);
 	if (order == nullptr) return CommandCost(STR_ERROR_STOCK_ORDER_NOT_FOUND);
 
-	if (order->seller != _current_company) return CommandCost(STR_ERROR_STOCK_NOT_YOUR_ORDER);
+	if (order->placer != _current_company) return CommandCost(STR_ERROR_STOCK_NOT_YOUR_ORDER);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
 		uint16_t remaining = order->GetRemainingUnits();
@@ -525,30 +603,30 @@ CommandCost CmdCancelSellOrder(DoCommandFlags flags, StockOrderID order_id)
 			/* Buy order cancel: refund escrowed money to the buyer. */
 			if (remaining > 0) {
 				Money refund = order->ask_price * remaining;
-				Company *buyer_company = Company::GetIfValid(order->seller);
+				Company *buyer_company = Company::GetIfValid(order->placer);
 				if (buyer_company != nullptr) {
 					buyer_company->money += refund;
 					buyer_company->yearly_expenses[0][EXPENSES_STOCK_PURCHASE] += refund;
 				}
 			}
 		} else if (remaining > 0) {
-			/* Return escrowed units to seller's holding in the target company. */
+			/* Return escrowed units to placer's holding in the target company. */
 			Company *target_company = Company::GetIfValid(order->target);
 			if (target_company != nullptr) {
-				/* For IPO orders (seller == target), units go back to unissued.
-				 * For regular sell orders, units go back to seller's holdings. */
-				if (order->seller == order->target) {
+				/* For IPO orders (placer == target), units go back to unissued.
+				 * For regular sell orders, units go back to placer's holdings. */
+				if (order->placer == order->target) {
 					/* IPO cancel: reduce total issued. */
 					target_company->stock_info.total_issued -= remaining;
 					if (target_company->stock_info.total_issued == 0) {
 						target_company->stock_info.listed = false;
 					}
 				} else {
-					StockHolding *holding = target_company->stock_info.FindHolder(order->seller);
+					StockHolding *holding = target_company->stock_info.FindHolder(order->placer);
 					if (holding != nullptr) {
 						holding->units += remaining;
 					} else {
-						target_company->stock_info.holders.push_back({order->seller, remaining, order->ask_price});
+						target_company->stock_info.holders.push_back({order->placer, remaining, order->ask_price});
 					}
 				}
 			}
@@ -581,7 +659,7 @@ CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16
 	StockOrder *order = _stock_order_book.FindOrder(order_id);
 	if (order == nullptr) return CommandCost(STR_ERROR_STOCK_ORDER_NOT_FOUND);
 
-	if (order->seller == _current_company) return CommandCost(STR_ERROR_STOCK_CANNOT_FILL_ORDER);
+	if (order->placer == _current_company) return CommandCost(STR_ERROR_STOCK_CANNOT_FILL_ORDER);
 
 	Company *target_company = Company::GetIfValid(order->target);
 	if (target_company == nullptr) return CMD_ERROR;
@@ -596,8 +674,8 @@ CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16
 	CommandCost ret(EXPENSES_STOCK_PURCHASE, total_cost);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
-		/* Transfer money: buyer pays, seller receives. */
-		Company *seller_company = Company::GetIfValid(order->seller);
+		/* Transfer money: buyer pays, sell-side placer receives. */
+		Company *seller_company = Company::GetIfValid(order->placer);
 		if (seller_company != nullptr) {
 			seller_company->money += total_cost;
 			seller_company->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += total_cost;
@@ -715,11 +793,11 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 			uint16_t take = std::min(remaining_to_buy, order->GetRemainingUnits());
 			Money payment = price * take;
 
-			/* Pay the seller. */
-			Company *seller = Company::GetIfValid(order->seller);
-			if (seller != nullptr) {
-				seller->money += payment;
-				seller->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
+			/* Pay the sell-side placer. */
+			Company *sell_placer = Company::GetIfValid(order->placer);
+			if (sell_placer != nullptr) {
+				sell_placer->money += payment;
+				sell_placer->yearly_expenses[0][EXPENSES_STOCK_REVENUE] += payment;
 			}
 
 			order->units_filled += take;
@@ -803,7 +881,7 @@ CommandCost CmdPlaceBuyOrder(DoCommandFlags flags, CompanyID target, uint16_t un
 	if (buyer->money < max_cost) return CommandCost(STR_ERROR_STOCK_CANNOT_BUY_ORDER);
 
 	/* Check order limits. */
-	if (_stock_order_book.CountOrdersBySeller(_current_company) >= MAX_STOCK_ORDERS_PER_COMPANY) {
+	if (_stock_order_book.CountOrdersByPlacer(_current_company) >= MAX_STOCK_ORDERS_PER_COMPANY) {
 		return CommandCost(STR_ERROR_STOCK_TOO_MANY_ORDERS);
 	}
 	if (_stock_order_book.orders.size() >= MAX_TOTAL_STOCK_ORDERS) {
@@ -818,7 +896,7 @@ CommandCost CmdPlaceBuyOrder(DoCommandFlags flags, CompanyID target, uint16_t un
 		/* Create the buy order. */
 		StockOrder order;
 		order.order_id = _stock_order_book.next_order_id++;
-		order.seller = _current_company; /* 'seller' field stores the order placer. */
+		order.placer = _current_company;
 		order.target = target;
 		order.units = units;
 		order.units_filled = 0;
@@ -986,7 +1064,7 @@ static constexpr uint8_t MARKET_MAKER_MAX_SELL_ORDERS = 2;
  * Order sizes are 2% of total issued units each (rounded up to at least 1),
  * capped so that the global order book limit is not exceeded.
  *
- * Market maker orders use CompanyID::Invalid() as the seller field and have
+ * Market maker orders use CompanyID::Invalid() as the placer field and have
  * is_market_maker = true so MatchOrders() can handle them specially:
  * synthetic sell orders inject liquidity (no payment on match); synthetic buy
  * orders absorb supply (shares removed from circulation, no holding created).
@@ -1032,7 +1110,7 @@ static void RunMarketMaker()
 
 			StockOrder order;
 			order.order_id      = _stock_order_book.next_order_id++;
-			order.seller        = CompanyID::Invalid();
+			order.placer        = CompanyID::Invalid();
 			order.target        = target;
 			order.units         = order_units;
 			order.units_filled  = 0;
@@ -1050,7 +1128,7 @@ static void RunMarketMaker()
 
 			StockOrder order;
 			order.order_id      = _stock_order_book.next_order_id++;
-			order.seller        = CompanyID::Invalid();
+			order.placer        = CompanyID::Invalid();
 			order.target        = target;
 			order.units         = order_units;
 			order.units_filled  = 0;
@@ -1081,6 +1159,13 @@ static const IntervalTimer<TimerGameEconomy> _run_market_maker({TimerGameEconomy
 /** Timer for yearly dividend payments. */
 static const IntervalTimer<TimerGameEconomy> _pay_annual_dividends({TimerGameEconomy::Trigger::Year, TimerGameEconomy::Priority::None}, [](auto) {
 	PayAnnualDividends();
+});
+
+/** Timer for monthly expiration of old stock orders. */
+static const IntervalTimer<TimerGameEconomy> _expire_stock_orders({TimerGameEconomy::Trigger::Month, TimerGameEconomy::Priority::None}, [](auto) {
+	if (!_settings_game.economy.stock_market) return;
+	_stock_order_book.ExpireOldOrders();
+	InvalidateWindowClassesData(WC_STOCK_MARKET);
 });
 
 /** Timer for daily takeover defense cleanup (if bidder went bankrupt). */

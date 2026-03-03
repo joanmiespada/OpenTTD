@@ -27,11 +27,11 @@ static StockHolding MakeHolding(CompanyID owner, uint16_t units, Money price)
 }
 
 /** Helper to create a StockOrder with common fields. */
-static StockOrder MakeOrder(StockOrderID id, CompanyID seller, CompanyID target, uint16_t units, uint16_t filled = 0, Money ask_price = 100)
+static StockOrder MakeOrder(StockOrderID id, CompanyID placer, CompanyID target, uint16_t units, uint16_t filled = 0, Money ask_price = 100)
 {
 	StockOrder o;
 	o.order_id = id;
-	o.seller = seller;
+	o.placer = placer;
 	o.target = target;
 	o.units = units;
 	o.units_filled = filled;
@@ -150,32 +150,32 @@ TEST_CASE("StockOrderBook::RemoveFilledOrders")
 	}
 }
 
-TEST_CASE("StockOrderBook::CountOrdersBySeller")
+TEST_CASE("StockOrderBook::CountOrdersByPlacer")
 {
 	StockOrderBook book;
-	CompanyID seller_a{0};
-	CompanyID seller_b{1};
-	CompanyID seller_c{2};
+	CompanyID placer_a{0};
+	CompanyID placer_b{1};
+	CompanyID placer_c{2};
 
-	SECTION("correct count per seller") {
+	SECTION("correct count per placer") {
 		for (uint32_t i = 0; i < 3; i++) {
-			book.orders.push_back(MakeOrder(i, seller_a, seller_a, 10));
+			book.orders.push_back(MakeOrder(i, placer_a, placer_a, 10));
 		}
 		for (uint32_t i = 3; i < 5; i++) {
-			book.orders.push_back(MakeOrder(i, seller_b, seller_b, 10));
+			book.orders.push_back(MakeOrder(i, placer_b, placer_b, 10));
 		}
 
-		CHECK(book.CountOrdersBySeller(seller_a) == 3);
-		CHECK(book.CountOrdersBySeller(seller_b) == 2);
+		CHECK(book.CountOrdersByPlacer(placer_a) == 3);
+		CHECK(book.CountOrdersByPlacer(placer_b) == 2);
 	}
 
-	SECTION("zero for unknown seller") {
-		book.orders.push_back(MakeOrder(0, seller_a, seller_a, 10));
-		CHECK(book.CountOrdersBySeller(seller_c) == 0);
+	SECTION("zero for unknown placer") {
+		book.orders.push_back(MakeOrder(0, placer_a, placer_a, 10));
+		CHECK(book.CountOrdersByPlacer(placer_c) == 0);
 	}
 
 	SECTION("empty book") {
-		CHECK(book.CountOrdersBySeller(seller_a) == 0);
+		CHECK(book.CountOrdersByPlacer(placer_a) == 0);
 	}
 }
 
@@ -186,7 +186,7 @@ TEST_CASE("StockOrderBook::RemoveOrdersForCompany")
 	CompanyID c1{1};
 	CompanyID c2{2};
 
-	SECTION("removes orders where company is seller") {
+	SECTION("removes orders where company is placer") {
 		book.orders.push_back(MakeOrder(0, c0, c1, 10));
 		book.orders.push_back(MakeOrder(1, c1, c0, 10));
 		book.orders.push_back(MakeOrder(2, c2, c1, 10));
@@ -194,7 +194,7 @@ TEST_CASE("StockOrderBook::RemoveOrdersForCompany")
 		book.RemoveOrdersForCompany(c0);
 
 		CHECK(book.orders.size() == 1);
-		CHECK(book.FindOrder(0) == nullptr); /* c0 as seller */
+		CHECK(book.FindOrder(0) == nullptr); /* c0 as placer */
 		CHECK(book.FindOrder(1) == nullptr); /* c0 as target */
 		CHECK(book.FindOrder(2) != nullptr); /* unrelated */
 	}
@@ -213,7 +213,7 @@ TEST_CASE("StockOrderBook::RemoveOrdersForCompany")
 		CHECK(book.orders.empty());
 	}
 
-	SECTION("removes IPO orders (seller == target)") {
+	SECTION("removes IPO orders (placer == target)") {
 		book.orders.push_back(MakeOrder(0, c0, c0, 10)); /* IPO */
 		book.orders.push_back(MakeOrder(1, c1, c1, 10)); /* other IPO */
 
@@ -366,7 +366,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		/* Buy bid (50) < sell ask (100): no match should occur. */
 		StockOrder buy;
 		buy.order_id = 1;
-		buy.seller   = c0;
+		buy.placer   = c0;
 		buy.target   = target;
 		buy.units    = 10;
 		buy.units_filled = 0;
@@ -375,7 +375,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 
 		StockOrder sell;
 		sell.order_id = 2;
-		sell.seller   = c1;
+		sell.placer   = c1;
 		sell.target   = target;
 		sell.units    = 10;
 		sell.units_filled = 0;
@@ -399,7 +399,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		/* Even with bid >= ask, same owner must be rejected. */
 		StockOrder buy;
 		buy.order_id  = 1;
-		buy.seller    = c0;
+		buy.placer    = c0;
 		buy.target    = target;
 		buy.units     = 10;
 		buy.units_filled = 0;
@@ -408,7 +408,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 
 		StockOrder sell;
 		sell.order_id  = 2;
-		sell.seller    = c0; /* same owner as the buy order */
+		sell.placer    = c0; /* same owner as the buy order */
 		sell.target    = target;
 		sell.units     = 10;
 		sell.units_filled = 0;
@@ -431,7 +431,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 
 		StockOrder buy;
 		buy.order_id  = 1;
-		buy.seller    = c0;
+		buy.placer    = c0;
 		buy.target    = other_target;
 		buy.units     = 10;
 		buy.units_filled = 0;
@@ -440,7 +440,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 
 		StockOrder sell;
 		sell.order_id  = 2;
-		sell.seller    = c1;
+		sell.placer    = c1;
 		sell.target    = other_target;
 		sell.units     = 10;
 		sell.units_filled = 0;
@@ -463,7 +463,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		/* Push a pre-filled order; MatchOrders must remove it via RemoveFilledOrders. */
 		StockOrder filled;
 		filled.order_id    = 1;
-		filled.seller      = c0;
+		filled.placer      = c0;
 		filled.target      = target;
 		filled.units       = 5;
 		filled.units_filled = 5; /* already filled */
@@ -472,7 +472,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 
 		StockOrder open;
 		open.order_id    = 2;
-		open.seller      = c1;
+		open.placer      = c1;
 		open.target      = target;
 		open.units       = 5;
 		open.units_filled = 0;
@@ -551,6 +551,10 @@ TEST_CASE("Stock market constants")
 		CHECK(TAKEOVER_DEFENSE_DAYS == 90);
 	}
 
+	SECTION("STOCK_ORDER_EXPIRY_DAYS is 180") {
+		CHECK(STOCK_ORDER_EXPIRY_DAYS == 180);
+	}
+
 	SECTION("MAX_STOCK_UNITS is 1200") {
 		CHECK(MAX_STOCK_UNITS == 1200);
 	}
@@ -569,5 +573,105 @@ TEST_CASE("Stock market constants")
 
 	SECTION("INVALID_STOCK_ORDER_ID is UINT32_MAX") {
 		CHECK(INVALID_STOCK_ORDER_ID == UINT32_MAX);
+	}
+}
+
+TEST_CASE("StockOrderBook::ExpireOldOrders")
+{
+	/* ExpireOldOrders() uses Company::GetIfValid() for the refund/return logic.
+	 * In the unit test environment no Company pool is initialised, so GetIfValid()
+	 * returns nullptr and only the order-removal behaviour is observable.
+	 * The four sections below verify the filtering logic independently of the
+	 * money/share-return side-effects which are covered by integration tests. */
+
+	StockOrderBook book;
+	TimerGameEconomy::date = TimerGameEconomy::Date(1000);
+
+	SECTION("fresh orders are not expired") {
+		StockOrder order;
+		order.order_id = 1;
+		order.placer = CompanyID::Begin();
+		order.target = static_cast<CompanyID>(1);
+		order.units = 10;
+		order.units_filled = 0;
+		order.ask_price = 100;
+		order.creation_date = TimerGameEconomy::Date(900); /* 100 days old, < 180 */
+		book.orders.push_back(order);
+
+		book.ExpireOldOrders();
+		CHECK(book.orders.size() == 1);
+	}
+
+	SECTION("old orders are expired") {
+		StockOrder order;
+		order.order_id = 1;
+		order.placer = CompanyID::Begin();
+		order.target = static_cast<CompanyID>(1);
+		order.units = 10;
+		order.units_filled = 0;
+		order.ask_price = 100;
+		order.creation_date = TimerGameEconomy::Date(500); /* 500 days old, >= 180 */
+		book.orders.push_back(order);
+
+		book.ExpireOldOrders();
+		CHECK(book.orders.empty());
+	}
+
+	SECTION("market maker orders never expire") {
+		StockOrder order;
+		order.order_id = 1;
+		order.placer = CompanyID::Invalid();
+		order.target = static_cast<CompanyID>(1);
+		order.units = 10;
+		order.units_filled = 0;
+		order.ask_price = 100;
+		order.creation_date = TimerGameEconomy::Date(0); /* very old */
+		order.is_market_maker = true;
+		book.orders.push_back(order);
+
+		book.ExpireOldOrders();
+		CHECK(book.orders.size() == 1);
+	}
+
+	SECTION("mixed orders: only old non-MM orders removed") {
+		/* Fresh order (100 days old: below threshold). */
+		StockOrder fresh;
+		fresh.order_id = 1;
+		fresh.placer = CompanyID::Begin();
+		fresh.target = static_cast<CompanyID>(1);
+		fresh.units = 5;
+		fresh.units_filled = 0;
+		fresh.ask_price = 50;
+		fresh.creation_date = TimerGameEconomy::Date(950);
+		book.orders.push_back(fresh);
+
+		/* Old order (900 days old: above threshold). */
+		StockOrder old_order;
+		old_order.order_id = 2;
+		old_order.placer = CompanyID::Begin();
+		old_order.target = static_cast<CompanyID>(1);
+		old_order.units = 5;
+		old_order.units_filled = 0;
+		old_order.ask_price = 50;
+		old_order.creation_date = TimerGameEconomy::Date(100);
+		book.orders.push_back(old_order);
+
+		/* Market maker order (very old but must never expire). */
+		StockOrder mm;
+		mm.order_id = 3;
+		mm.placer = CompanyID::Invalid();
+		mm.target = static_cast<CompanyID>(1);
+		mm.units = 5;
+		mm.units_filled = 0;
+		mm.ask_price = 50;
+		mm.creation_date = TimerGameEconomy::Date(0);
+		mm.is_market_maker = true;
+		book.orders.push_back(mm);
+
+		book.ExpireOldOrders();
+		CHECK(book.orders.size() == 2);
+		CHECK(book.FindOrder(1) != nullptr); /* fresh: kept */
+		CHECK(book.FindOrder(2) == nullptr); /* old: removed */
+		CHECK(book.FindOrder(3) != nullptr); /* MM: kept */
 	}
 }

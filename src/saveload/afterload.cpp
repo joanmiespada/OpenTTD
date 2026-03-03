@@ -3436,7 +3436,7 @@ bool AfterLoadGame()
 			/* Create a sell order for the available units at current share price. */
 			StockOrder order;
 			order.order_id = _stock_order_book.next_order_id++;
-			order.seller = c->index;
+			order.placer = c->index;
 			order.target = c->index;
 			order.units = c->stock_info.available_units;
 			order.units_filled = 0;
