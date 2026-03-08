@@ -24,6 +24,9 @@
 #include "textbuf_gui.h"
 #include "core/string_consumer.hpp"
 #include "graph_gui.h"
+#include "dropdown_type.h"
+#include "dropdown_func.h"
+#include "timer/timer_game_calendar.h"
 
 #include "widgets/stock_widget.h"
 
@@ -40,6 +43,7 @@ private:
 	Scrollbar *shareholders_vscroll = nullptr;   ///< Scrollbar for shareholders list.
 	Scrollbar *investments_vscroll = nullptr;    ///< Scrollbar for investments list.
 	Scrollbar *order_book_vscroll = nullptr;     ///< Scrollbar for the order book panel.
+	Scrollbar *transaction_vscroll = nullptr;    ///< Scrollbar for transaction history.
 	int line_height = 0;                         ///< Height of a single row.
 	Dimension icon{};                            ///< Size of a company icon sprite.
 	int col_company_width = 0;                   ///< Width of company name column.
@@ -47,8 +51,18 @@ private:
 	int col_avail_width = 0;                     ///< Width of available units column.
 	int col_hold_width = 0;                      ///< Width of your shares column.
 	int col_pl_width = 0;                        ///< Width of P&L column.
+	int col_yield_width = 0;                     ///< Width of dividend yield column.
 	CompanyID selected_company = CompanyID::Invalid(); ///< Currently selected company in market list.
 	CompanyID selected_investment = CompanyID::Invalid(); ///< Currently selected investment.
+
+	/** Sort modes for the market list. */
+	enum StockSortMode {
+		SORT_BY_PRICE,
+		SORT_BY_NAME,
+		SORT_BY_YIELD,
+		SORT_BY_MARKET_CAP,
+	};
+	StockSortMode sort_mode = SORT_BY_PRICE;
 
 	/** An investment entry for the My Investments panel. */
 	struct InvestmentEntry {
@@ -108,6 +122,25 @@ private:
 		return b->stock_info.share_price < a->stock_info.share_price;
 	}
 
+	static bool StockNameSorter(const Company * const &a, const Company * const &b)
+	{
+		return a->index < b->index;
+	}
+
+	static bool StockYieldSorter(const Company * const &a, const Company * const &b)
+	{
+		int64_t yield_a = (a->stock_info.share_price > 0) ? static_cast<int64_t>(a->stock_info.last_dividend_per_unit * 10000 / a->stock_info.share_price) : 0;
+		int64_t yield_b = (b->stock_info.share_price > 0) ? static_cast<int64_t>(b->stock_info.last_dividend_per_unit * 10000 / b->stock_info.share_price) : 0;
+		return yield_b < yield_a;
+	}
+
+	static bool StockMarketCapSorter(const Company * const &a, const Company * const &b)
+	{
+		Money cap_a = a->stock_info.share_price * static_cast<int64_t>(a->stock_info.total_issued);
+		Money cap_b = b->stock_info.share_price * static_cast<int64_t>(b->stock_info.total_issued);
+		return cap_b < cap_a;
+	}
+
 	/**
 	 * Find the cheapest sell order for a given target company.
 	 * @param target The company whose stock we want to buy.
@@ -134,6 +167,7 @@ public:
 		this->shareholders_vscroll = this->GetScrollbar(WID_STM_SHAREHOLDERS_SCROLLBAR);
 		this->investments_vscroll = this->GetScrollbar(WID_STM_INVESTMENTS_SCROLLBAR);
 		this->order_book_vscroll = this->GetScrollbar(WID_STM_ORDER_BOOK_SCROLLBAR);
+		this->transaction_vscroll = this->GetScrollbar(WID_STM_TRANSACTION_SCROLLBAR);
 		this->FinishInitNested(window_number);
 
 		this->market_companies.ForceRebuild();
@@ -143,7 +177,12 @@ public:
 	void OnPaint() override
 	{
 		this->BuildCompanyList();
-		this->market_companies.Sort(&StockPriceSorter);
+		switch (this->sort_mode) {
+			case SORT_BY_PRICE:      this->market_companies.Sort(&StockPriceSorter); break;
+			case SORT_BY_NAME:       this->market_companies.Sort(&StockNameSorter); break;
+			case SORT_BY_YIELD:      this->market_companies.Sort(&StockYieldSorter); break;
+			case SORT_BY_MARKET_CAP: this->market_companies.Sort(&StockMarketCapSorter); break;
+		}
 		this->market_vscroll->SetCount(static_cast<int>(this->market_companies.size()));
 
 		this->BuildInvestmentsList();
@@ -183,6 +222,8 @@ public:
 			this->order_book_vscroll->SetCount(std::max(bid_count, ask_count));
 		}
 
+		this->transaction_vscroll->SetCount(static_cast<int>(_stock_order_book.transactions.size()));
+
 		/* Disable buy/sell buttons if no selection or own company selected. */
 		bool no_selection = this->selected_company == CompanyID::Invalid();
 		bool is_own_company = (this->selected_company == _local_company);
@@ -217,6 +258,10 @@ public:
 			case WID_STM_ORDER_BOOK_PANEL:
 				this->DrawOrderBook(r);
 				break;
+
+			case WID_STM_TRANSACTION_PANEL:
+				this->DrawTransactionHistory(r);
+				break;
 		}
 	}
 
@@ -240,6 +285,27 @@ public:
 		/* Right column */
 		DrawString(mid + 4, ir.right, y, GetString(STR_STOCK_INFO_LAST_DIVIDEND, si.last_dividend_per_unit));
 		DrawString(mid + 4, ir.right, y + GetCharacterHeight(FS_NORMAL), GetString(STR_STOCK_INFO_TOTAL_DIVIDENDS, si.total_dividends_paid));
+
+		/* Third row - Market cap and P/E ratio */
+		if (si.listed && si.total_issued > 0) {
+			Money market_cap = si.share_price * static_cast<int64_t>(si.total_issued);
+			DrawString(ir.left, mid - 4, y + GetCharacterHeight(FS_NORMAL) * 3,
+				GetString(STR_STOCK_INFO_MARKET_CAP, market_cap));
+
+			/* P/E ratio: market_cap / annual_profit. Show as integer. */
+			int num_quarters = std::min<int>(my->num_valid_stat_ent, 4);
+			if (num_quarters > 0) {
+				Money total_profit = 0;
+				for (int i = 0; i < num_quarters; i++) {
+					total_profit += my->old_economy[i].income + my->old_economy[i].expenses;
+				}
+				if (total_profit > 0) {
+					int64_t pe_ratio = market_cap / total_profit;
+					DrawString(mid + 4, ir.right, y + GetCharacterHeight(FS_NORMAL) * 3,
+						GetString(STR_STOCK_INFO_PE_RATIO, pe_ratio));
+				}
+			}
+		}
 	}
 
 	/** Draw the shareholders scrollable panel. */
@@ -279,6 +345,21 @@ public:
 		if (this->investments.empty()) {
 			DrawString(ir.left, ir.right, ir.top, STR_STOCK_NO_INVESTMENTS);
 			return;
+		}
+
+		/* Portfolio summary line: total value and total P/L. */
+		{
+			Money total_value = 0;
+			Money total_pl = 0;
+			for (const auto &inv : this->investments) {
+				total_value += inv.current_value;
+				total_pl += inv.pl;
+			}
+
+			TextColour pl_colour = (total_pl >= 0) ? TC_GREEN : TC_RED;
+			DrawString(ir.left, ir.right, ir.top,
+				GetString(STR_STOCK_PORTFOLIO_SUMMARY, total_value, total_pl), pl_colour);
+			ir.top += GetCharacterHeight(FS_NORMAL) + 2;
 		}
 
 		int pos = this->investments_vscroll->GetPosition();
@@ -324,13 +405,15 @@ public:
 		int col_avail = col_price + this->col_price_width;
 		int col_hold = col_avail + this->col_avail_width;
 		int col_pl = col_hold + this->col_hold_width;
+		int col_yield = col_pl + this->col_pl_width;
 
 		/* Draw header row. */
 		DrawString(ir.left, col_price, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_COMPANY, TC_WHITE);
 		DrawString(col_price, col_avail, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_PRICE, TC_WHITE);
 		DrawString(col_avail, col_hold, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_AVAILABLE, TC_WHITE);
 		DrawString(col_hold, col_pl, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_YOUR_SHARES, TC_WHITE);
-		DrawString(col_pl, ir.right, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_PL, TC_WHITE);
+		DrawString(col_pl, col_yield, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_PL, TC_WHITE);
+		DrawString(col_yield, ir.right, ir.top + text_y_offset, STR_STOCK_MARKET_HEADER_YIELD, TC_WHITE);
 		ir.top += this->line_height;
 
 		int pos = this->market_vscroll->GetPosition();
@@ -354,6 +437,20 @@ public:
 			DrawString(col_price, col_avail, ir.top + text_y_offset,
 				GetString(STR_JUST_CURRENCY_LONG, c->stock_info.share_price), TC_GOLD);
 
+			/* Price change indicator */
+			if (c->stock_info.prev_quarter_price > 0) {
+				Money change = c->stock_info.share_price - c->stock_info.prev_quarter_price;
+				if (change > 0) {
+					DrawString(col_price + GetStringBoundingBox(GetString(STR_JUST_CURRENCY_LONG, c->stock_info.share_price)).width + 4,
+						col_avail, ir.top + text_y_offset,
+						GetString(STR_STOCK_PRICE_UP), TC_GREEN);
+				} else if (change < 0) {
+					DrawString(col_price + GetStringBoundingBox(GetString(STR_JUST_CURRENCY_LONG, c->stock_info.share_price)).width + 4,
+						col_avail, ir.top + text_y_offset,
+						GetString(STR_STOCK_PRICE_DOWN), TC_RED);
+				}
+			}
+
 			/* Available units on order book */
 			uint16_t available_on_book = 0;
 			for (const auto &order : _stock_order_book.orders) {
@@ -374,8 +471,15 @@ public:
 				Money cost_basis = holding->purchase_price * static_cast<int64_t>(your_units);
 				Money pl = current_value - cost_basis;
 				TextColour pl_colour = (pl >= 0) ? TC_GREEN : TC_RED;
-				DrawString(col_pl, ir.right, ir.top + text_y_offset,
+				DrawString(col_pl, col_yield, ir.top + text_y_offset,
 					GetString(STR_JUST_CURRENCY_LONG, pl), pl_colour);
+			}
+
+			/* Dividend yield */
+			if (c->stock_info.share_price > 0 && c->stock_info.last_dividend_per_unit > 0) {
+				int64_t yield_bp = c->stock_info.last_dividend_per_unit * 10000 / c->stock_info.share_price;
+				DrawString(col_yield, ir.right, ir.top + text_y_offset,
+					GetString(STR_STOCK_MARKET_YIELD_VALUE, yield_bp));
 			}
 
 			ir.top += this->line_height;
@@ -456,13 +560,44 @@ public:
 		}
 	}
 
+	/** Draw the transaction history scrollable panel. */
+	void DrawTransactionHistory(const Rect &r) const
+	{
+		Rect ir = r.Shrink(WidgetDimensions::scaled.framerect);
+		int text_y_offset = (this->line_height - GetCharacterHeight(FS_NORMAL)) / 2;
+
+		if (_stock_order_book.transactions.empty()) {
+			DrawString(ir.left, ir.right, ir.top + text_y_offset, STR_STOCK_NO_TRANSACTIONS, TC_FROMSTRING, SA_HOR_CENTER);
+			return;
+		}
+
+		int pos = this->transaction_vscroll->GetPosition();
+		int capacity = this->transaction_vscroll->GetCapacity();
+		int total = static_cast<int>(_stock_order_book.transactions.size());
+
+		/* Show most recent first - iterate backwards. */
+		for (int i = 0; i < capacity && (total - 1 - pos - i) >= 0; i++) {
+			const StockTransaction &txn = _stock_order_book.transactions[total - 1 - pos - i];
+
+			/* Economy dates share the same day-counter epoch as calendar dates,
+			 * so the underlying int32_t value can be reinterpreted for display. */
+			TimerGameCalendar::Date display_date{txn.date.base()};
+			DrawString(ir.left, ir.right, ir.top + text_y_offset,
+				GetString(STR_STOCK_TRANSACTION_LINE,
+					display_date,
+					txn.buyer, txn.target, txn.units, txn.price_per_unit, txn.total_value));
+
+			ir.top += this->line_height;
+		}
+	}
+
 	void UpdateWidgetSize(WidgetID widget, Dimension &size, [[maybe_unused]] const Dimension &padding, [[maybe_unused]] Dimension &fill, [[maybe_unused]] Dimension &resize) override
 	{
 		switch (widget) {
 			case WID_STM_MY_COMPANY_PANEL:
 				this->icon = GetSpriteSize(SPR_COMPANY_ICON);
 				this->line_height = std::max<int>(this->icon.height + WidgetDimensions::scaled.vsep_normal, GetCharacterHeight(FS_NORMAL) + 2);
-				size.height = GetCharacterHeight(FS_NORMAL) * 3 + WidgetDimensions::scaled.framerect.Vertical();
+				size.height = GetCharacterHeight(FS_NORMAL) * 4 + WidgetDimensions::scaled.framerect.Vertical();
 				break;
 
 			case WID_STM_SHAREHOLDERS_PANEL:
@@ -494,9 +629,12 @@ public:
 				this->col_pl_width = std::max(
 					GetStringBoundingBox(STR_STOCK_MARKET_HEADER_PL).width,
 					GetStringBoundingBox(GetString(STR_JUST_CURRENCY_LONG, (Money)999999999)).width) + header_gap;
-				int data_cols_width = this->col_price_width + this->col_avail_width + this->col_hold_width + this->col_pl_width;
-				this->col_company_width = std::max(
-					(int)GetStringBoundingBox(STR_STOCK_MARKET_HEADER_COMPANY).width + header_gap,
+				this->col_yield_width = std::max(
+					GetStringBoundingBox(STR_STOCK_MARKET_HEADER_YIELD).width,
+					GetStringBoundingBox(GetString(STR_STOCK_MARKET_YIELD_VALUE, (int64_t)9999)).width) + header_gap;
+				int data_cols_width = this->col_price_width + this->col_avail_width + this->col_hold_width + this->col_pl_width + this->col_yield_width;
+				this->col_company_width = std::max<int>(
+					GetStringBoundingBox(STR_STOCK_MARKET_HEADER_COMPANY).width + header_gap,
 					200); /* Minimum width for company names. */
 
 				size.width = std::max(size.width, (uint)(this->col_company_width + data_cols_width + WidgetDimensions::scaled.framerect.Horizontal()));
@@ -506,6 +644,11 @@ public:
 			case WID_STM_ORDER_BOOK_PANEL:
 				/* Header row + 4 data rows visible by default; scrollable to show more. */
 				size.height = this->line_height * 5 + WidgetDimensions::scaled.framerect.Vertical();
+				resize.height = this->line_height;
+				break;
+
+			case WID_STM_TRANSACTION_PANEL:
+				size.height = this->line_height * 4 + WidgetDimensions::scaled.framerect.Vertical();
 				resize.height = this->line_height;
 				break;
 		}
@@ -605,6 +748,16 @@ public:
 				break;
 			}
 
+			case WID_STM_SORT_DROPDOWN: {
+				DropDownList list;
+				list.push_back(MakeDropDownListStringItem(STR_STOCK_SORT_PRICE, SORT_BY_PRICE));
+				list.push_back(MakeDropDownListStringItem(STR_STOCK_SORT_NAME, SORT_BY_NAME));
+				list.push_back(MakeDropDownListStringItem(STR_STOCK_SORT_YIELD, SORT_BY_YIELD));
+				list.push_back(MakeDropDownListStringItem(STR_STOCK_SORT_MARKET_CAP, SORT_BY_MARKET_CAP));
+				ShowDropDownList(this, std::move(list), this->sort_mode, WID_STM_SORT_DROPDOWN);
+				break;
+			}
+
 			case WID_STM_PRICE_GRAPH_BUTTON:
 				ShowStockPriceGraph();
 				break;
@@ -694,6 +847,15 @@ public:
 		}
 	}
 
+	void OnDropdownSelect(WidgetID widget, int index, int) override
+	{
+		if (widget == WID_STM_SORT_DROPDOWN) {
+			this->sort_mode = static_cast<StockSortMode>(index);
+			this->market_companies.ForceRebuild();
+			this->SetDirty();
+		}
+	}
+
 	void OnInvalidateData([[maybe_unused]] int data = 0, [[maybe_unused]] bool gui_scope = true) override
 	{
 		this->market_companies.ForceRebuild();
@@ -753,7 +915,10 @@ static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets
 	/* Bottom panel - Stock Market. */
 	NWidget(WWT_PANEL, COLOUR_BROWN),
 		NWidget(NWID_VERTICAL), SetPadding(WidgetDimensions::unscaled.framerect),
-			NWidget(WWT_TEXT, INVALID_COLOUR, WID_STM_MARKET_LABEL), SetStringTip(STR_STOCK_MARKET_TITLE), SetFill(1, 0),
+			NWidget(NWID_HORIZONTAL),
+				NWidget(WWT_TEXT, INVALID_COLOUR, WID_STM_MARKET_LABEL), SetStringTip(STR_STOCK_MARKET_TITLE), SetFill(1, 0),
+				NWidget(WWT_DROPDOWN, COLOUR_BROWN, WID_STM_SORT_DROPDOWN), SetStringTip(STR_STOCK_SORT_PRICE), SetMinimalSize(100, 12),
+			EndContainer(),
 		EndContainer(),
 	EndContainer(),
 	NWidget(NWID_HORIZONTAL),
@@ -772,6 +937,18 @@ static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets
 		NWidget(WWT_PANEL, COLOUR_BROWN, WID_STM_ORDER_BOOK_PANEL), SetMinimalSize(600, 60), SetResize(0, 10), SetScrollbar(WID_STM_ORDER_BOOK_SCROLLBAR),
 		EndContainer(),
 		NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_STM_ORDER_BOOK_SCROLLBAR),
+	EndContainer(),
+
+	/* Transaction history panel. */
+	NWidget(WWT_PANEL, COLOUR_BROWN),
+		NWidget(NWID_VERTICAL), SetPadding(WidgetDimensions::unscaled.framerect),
+			NWidget(WWT_TEXT, INVALID_COLOUR, WID_STM_TRANSACTION_HEADER), SetStringTip(STR_STOCK_TRANSACTION_CAPTION), SetFill(1, 0),
+		EndContainer(),
+	EndContainer(),
+	NWidget(NWID_HORIZONTAL),
+		NWidget(WWT_PANEL, COLOUR_BROWN, WID_STM_TRANSACTION_PANEL), SetMinimalSize(600, 48), SetResize(0, 10), SetScrollbar(WID_STM_TRANSACTION_SCROLLBAR),
+		EndContainer(),
+		NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_STM_TRANSACTION_SCROLLBAR),
 	EndContainer(),
 
 	NWidget(NWID_HORIZONTAL, NWidContainerFlag::EqualSize),

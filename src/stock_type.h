@@ -12,6 +12,7 @@
 
 #include "company_type.h"
 #include "core/overflowsafe_type.hpp"
+#include "economy_type.h"
 #include "timer/timer_game_economy.h"
 
 /** Maximum percentage of company value that can be issued as stock (in 0.01% units). */
@@ -35,8 +36,27 @@ static constexpr uint16_t TAKEOVER_DEFENSE_DAYS = 90;
 /** Number of economy days before an unfilled stock order expires. */
 static constexpr uint16_t STOCK_ORDER_EXPIRY_DAYS = 180;
 
+/** Maximum price change per trade as a percentage of current price. */
+static constexpr uint8_t STOCK_MAX_PRICE_CHANGE_PERCENT = 50;
+
+/** Minimum share price (in currency units) required before a stock split is allowed. */
+static constexpr Money STOCK_SPLIT_MIN_PRICE = 10000;
+
 using StockOrderID = uint32_t;
 static constexpr StockOrderID INVALID_STOCK_ORDER_ID = UINT32_MAX;
+
+/** Maximum number of transaction history entries to keep. */
+static constexpr uint16_t MAX_STOCK_TRANSACTIONS = 64;
+
+/** Represents a completed stock trade for the transaction log. */
+struct StockTransaction {
+	TimerGameEconomy::Date date{};  ///< Date the trade occurred.
+	CompanyID buyer;                ///< Company that bought.
+	CompanyID target;               ///< Company whose stock was traded.
+	uint16_t units = 0;            ///< Number of units traded.
+	Money price_per_unit = 0;      ///< Trade price per unit.
+	Money total_value = 0;         ///< Total transaction value.
+};
 
 /** Represents a stock holding by one company in another. */
 struct StockHolding {
@@ -80,6 +100,7 @@ struct StockOrder {
 struct StockOrderBook {
 	StockOrderID next_order_id = 0; ///< Next order ID to assign.
 	std::vector<StockOrder> orders{}; ///< All active sell orders.
+	std::vector<StockTransaction> transactions{}; ///< Rolling transaction history log.
 
 	StockOrder *FindOrder(StockOrderID id);
 	const StockOrder *FindOrder(StockOrderID id) const;
@@ -88,6 +109,9 @@ struct StockOrderBook {
 	void RemoveOrdersForCompany(CompanyID company);
 	void ExpireOldOrders();
 	void MatchOrders(CompanyID target);
+
+	/** Record a completed trade in the transaction history. */
+	void RecordTransaction(TimerGameEconomy::Date date, CompanyID buyer, CompanyID target, uint16_t units, Money price);
 };
 
 extern StockOrderBook _stock_order_book;
@@ -98,6 +122,7 @@ struct CompanyStockInfo {
 	uint16_t total_issued = 0;              ///< Total units issued (max MAX_STOCK_UNITS).
 	uint16_t available_units = 0;           ///< Units currently available for purchase on market (legacy, used for migration).
 	Money share_price = 0;                  ///< Current price per unit.
+	Money prev_quarter_price = 0;           ///< Share price at the end of the previous quarter (for change indicators).
 	Money last_dividend_per_unit = 0;       ///< Last dividend paid per unit.
 	Money total_dividends_paid = 0;         ///< Lifetime dividends paid by this company.
 	CompanyID takeover_bidder = CompanyID::Invalid(); ///< Company attempting hostile takeover.

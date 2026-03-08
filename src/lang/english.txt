@@ -689,6 +689,8 @@ STR_STOCK_INFO_TOTAL_ISSUED                                     :{BLACK}Total Is
 STR_STOCK_INFO_AVAILABLE                                        :{BLACK}Available: {COMMA} units
 STR_STOCK_INFO_LAST_DIVIDEND                                    :{BLACK}Last Dividend: {CURRENCY_LONG} / unit
 STR_STOCK_INFO_TOTAL_DIVIDENDS                                  :{BLACK}Total Dividends Paid: {CURRENCY_LONG}
+STR_STOCK_INFO_MARKET_CAP                                       :{BLACK}Market Cap: {CURRENCY_LONG}
+STR_STOCK_INFO_PE_RATIO                                         :{BLACK}P/E Ratio: {NUM}
 STR_STOCK_ISSUE_SHARES                                          :{BLACK}Issue Shares
 STR_STOCK_ISSUE_SHARES_TOOLTIP                                  :{BLACK}Issue new shares on the market. Ctrl+Click to issue maximum
 STR_STOCK_ISSUE_SHARES_QUERY                                    :Enter the number of share units to issue
@@ -702,6 +704,7 @@ STR_STOCK_NO_SHAREHOLDERS                                       :{BLACK}No share
 # My Investments section
 STR_STOCK_INVESTMENTS_HEADER                                    :{BLACK}My Investments
 STR_STOCK_NO_INVESTMENTS                                        :{BLACK}No investments
+STR_STOCK_PORTFOLIO_SUMMARY                                     :{BLACK}Portfolio: {CURRENCY_LONG}  P/L: {CURRENCY_LONG}
 STR_STOCK_INVESTMENT_LINE                                       :{BLACK}{STRING} - {COMMA} units ({CURRENCY_LONG}) {STRING}
 STR_STOCK_INVESTMENT_PL_POSITIVE                                :{GREEN}+{CURRENCY_LONG}
 STR_STOCK_INVESTMENT_PL_NEGATIVE                                :{RED}{CURRENCY_LONG}
@@ -716,6 +719,10 @@ STR_STOCK_MARKET_HEADER_PRICE                                   :{WHITE}Share Pr
 STR_STOCK_MARKET_HEADER_AVAILABLE                               :{WHITE}Available
 STR_STOCK_MARKET_HEADER_YOUR_SHARES                             :{WHITE}Holdings
 STR_STOCK_MARKET_HEADER_PL                                      :{WHITE}P&&L
+STR_STOCK_MARKET_HEADER_YIELD                                   :{BLACK}Yield
+STR_STOCK_MARKET_YIELD_VALUE                                    :{COMMA}bp
+STR_STOCK_PRICE_UP                                              :{UP_ARROW}
+STR_STOCK_PRICE_DOWN                                            :{DOWN_ARROW}
 STR_STOCK_MARKET_UNITS_FRACTION                                 :{COMMA} / {COMMA}
 STR_STOCK_MARKET_BUY                                            :{BLACK}Buy Shares
 STR_STOCK_MARKET_BUY_TOOLTIP                                    :{BLACK}Buy shares of the selected company. Ctrl+Click to buy maximum available
@@ -725,6 +732,10 @@ STR_STOCK_MARKET_SELL_TOOLTIP                                   :{BLACK}Sell sha
 STR_STOCK_MARKET_SELL_QUERY                                     :Enter the number of share units to sell
 STR_STOCK_SHOW_PRICE_GRAPH                                      :{BLACK}Price Graph
 STR_STOCK_SHOW_PRICE_GRAPH_TOOLTIP                              :{BLACK}Show stock price history graph
+STR_STOCK_SORT_PRICE                                            :{BLACK}Sort: Price
+STR_STOCK_SORT_NAME                                             :{BLACK}Sort: Name
+STR_STOCK_SORT_YIELD                                            :{BLACK}Sort: Yield
+STR_STOCK_SORT_MARKET_CAP                                       :{BLACK}Sort: Market Cap
 
 # Order book section
 STR_STOCK_ORDER_BOOK_CAPTION                                    :{BLACK}Order Book
@@ -733,6 +744,11 @@ STR_STOCK_ORDER_BOOK_ASK_HEADER                                 :{RED}Asks (Sell
 STR_STOCK_ORDER_BOOK_ENTRY_BID                                  :{GREEN}{CURRENCY_LONG} x {COMMA}
 STR_STOCK_ORDER_BOOK_ENTRY_ASK                                  :{RED}{CURRENCY_LONG} x {COMMA}
 STR_STOCK_ORDER_BOOK_EMPTY                                      :{BLACK}No orders
+
+# Transaction history section
+STR_STOCK_TRANSACTION_CAPTION                                   :{BLACK}Transaction History
+STR_STOCK_NO_TRANSACTIONS                                       :{BLACK}No transactions recorded
+STR_STOCK_TRANSACTION_LINE                                      :{BLACK}{DATE_SHORT}: {COMPANY} bought {COMPANY} x{NUM} @{CURRENCY_LONG} = {CURRENCY_LONG}
 
 STR_ERROR_STOCK_MARKET_DISABLED                                 :{WHITE}Stock marketplace is disabled
 STR_ERROR_STOCK_NOT_LISTED                                      :{WHITE}This company has not issued stock
@@ -764,6 +780,10 @@ STR_NEWS_STOCK_TAKEOVER_DEFENSE                                 :{BIG_FONT}{BLAC
 STR_NEWS_STOCK_TAKEOVER                                         :{BIG_FONT}{BLACK}{COMPANY} has been taken over by {COMPANY}
 STR_NEWS_STOCK_BUYBACK                                          :{BIG_FONT}{BLACK}{COMPANY} is buying back its own stock
 STR_NEWS_STOCK_ORDER_EXPIRED                                    :{BLACK}Stock orders have expired due to inactivity
+STR_NEWS_STOCK_SPLIT                                            :{BLACK}{COMPANY} has performed a 2:1 stock split
+STR_ERROR_STOCK_SPLIT_PRICE_TOO_LOW                             :{WHITE}Share price too low for stock split
+STR_ERROR_STOCK_SPLIT_TOO_MANY_UNITS                            :{WHITE}Stock split would exceed maximum units
+STR_ERROR_STOCK_CANNOT_DELIST_DURING_TAKEOVER                   :{WHITE}Cannot delist company during active takeover defense
 
 STR_STOCK_PLACE_BUY_ORDER                                       :{BLACK}Place Buy Order
 STR_STOCK_PLACE_BUY_ORDER_TOOLTIP                               :{BLACK}Place a standing buy order at a limit price (Ctrl+Click to buy at market price)

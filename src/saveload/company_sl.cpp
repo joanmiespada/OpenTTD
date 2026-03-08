@@ -514,6 +514,7 @@ public:
 		SLE_CONDVAR(CompanyStockInfo, takeover_bidder,         SLE_UINT8,  SLV_STOCK_MARKET_V2, SL_MAX_VERSION),
 		SLE_CONDVAR(CompanyStockInfo, takeover_defense_start,  SLE_INT32,  SLV_STOCK_MARKET_V2, SL_MAX_VERSION),
 		SLE_CONDVAR(CompanyStockInfo, takeover_defense_active, SLE_BOOL,   SLV_STOCK_MARKET_V2, SL_MAX_VERSION),
+		SLE_CONDVAR(CompanyStockInfo, prev_quarter_price,      SLE_INT64,  SLV_STOCK_MARKET_V4, SL_MAX_VERSION),
 	};
 	static inline const SaveLoadCompatTable compat_description = {};
 

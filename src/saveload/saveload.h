@@ -418,6 +418,7 @@ enum SaveLoadVersion : uint16_t {
 	SLV_STOCK_ORDER_BOOK,                   ///< 366  Stock market order book and price history.
 	SLV_STOCK_MARKET_V2,                    ///< 367  Stock market buy orders and hostile takeovers.
 	SLV_STOCK_MARKET_V3,                    ///< 368  Stock market maker automated orders.
+	SLV_STOCK_MARKET_V4,                    ///< 369  Stock market previous quarter price for change indicators.
 
 	SL_MAX_VERSION,                         ///< Highest possible saveload version
 };

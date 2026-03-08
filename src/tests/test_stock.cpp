@@ -576,6 +576,44 @@ TEST_CASE("Stock market constants")
 	}
 }
 
+TEST_CASE("StockOrderBook::RecordTransaction")
+{
+	StockOrderBook book;
+	CompanyID c0{0};
+	CompanyID c1{1};
+
+	SECTION("records a transaction") {
+		book.RecordTransaction(TimerGameEconomy::Date(100), c0, c1, 10, Money(50));
+		REQUIRE(book.transactions.size() == 1);
+		CHECK(book.transactions[0].buyer == c0);
+		CHECK(book.transactions[0].target == c1);
+		CHECK(book.transactions[0].units == 10);
+		CHECK(book.transactions[0].price_per_unit == 50);
+		CHECK(book.transactions[0].total_value == 500);
+	}
+
+	SECTION("trims to MAX_STOCK_TRANSACTIONS") {
+		for (uint16_t i = 0; i < MAX_STOCK_TRANSACTIONS + 10; i++) {
+			book.RecordTransaction(TimerGameEconomy::Date(i), c0, c1, 1, Money(100));
+		}
+		CHECK(book.transactions.size() == MAX_STOCK_TRANSACTIONS);
+		/* Most recent should be the last one added. */
+		CHECK(book.transactions.back().date == TimerGameEconomy::Date(MAX_STOCK_TRANSACTIONS + 9));
+	}
+
+	SECTION("RemoveOrdersForCompany also clears related transactions") {
+		book.RecordTransaction(TimerGameEconomy::Date(1), c0, c1, 5, Money(100));
+		book.RecordTransaction(TimerGameEconomy::Date(2), c1, c0, 3, Money(200));
+		book.RecordTransaction(TimerGameEconomy::Date(3), CompanyID{2}, CompanyID{3}, 1, Money(50));
+
+		book.RemoveOrdersForCompany(c0);
+
+		/* Only the transaction not involving c0 should remain. */
+		CHECK(book.transactions.size() == 1);
+		CHECK(book.transactions[0].buyer == CompanyID{2});
+	}
+}
+
 TEST_CASE("StockOrderBook::ExpireOldOrders")
 {
 	/* ExpireOldOrders() uses Company::GetIfValid() for the refund/return logic.

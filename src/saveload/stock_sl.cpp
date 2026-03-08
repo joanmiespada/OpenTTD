@@ -104,11 +104,50 @@ struct STKHChunkHandler : ChunkHandler {
 	}
 };
 
+static const SaveLoad _stock_transaction_desc[] = {
+	SLE_VAR(StockTransaction, date,           SLE_INT32),
+	SLE_VAR(StockTransaction, buyer,          SLE_UINT8),
+	SLE_VAR(StockTransaction, target,         SLE_UINT8),
+	SLE_VAR(StockTransaction, units,          SLE_UINT16),
+	SLE_VAR(StockTransaction, price_per_unit, SLE_INT64),
+	SLE_VAR(StockTransaction, total_value,    SLE_INT64),
+};
+
+struct STXNChunkHandler : ChunkHandler {
+	STXNChunkHandler() : ChunkHandler('STXN', CH_TABLE) {}
+
+	void Save() const override
+	{
+		SlTableHeader(_stock_transaction_desc);
+
+		for (size_t i = 0; i < _stock_order_book.transactions.size(); i++) {
+			SlSetArrayIndex(static_cast<int>(i));
+			SlObject(&_stock_order_book.transactions[i], _stock_transaction_desc);
+		}
+	}
+
+	void Load() const override
+	{
+		const std::vector<SaveLoad> slt = SlTableHeader(_stock_transaction_desc);
+
+		_stock_order_book.transactions.clear();
+
+		int index;
+		while ((index = SlIterateArray()) != -1) {
+			StockTransaction txn;
+			SlObject(&txn, slt);
+			_stock_order_book.transactions.push_back(txn);
+		}
+	}
+};
+
 static const STOKChunkHandler STOK;
 static const STKHChunkHandler STKH;
+static const STXNChunkHandler STXN;
 static const ChunkHandlerRef stock_chunk_handlers[] = {
 	STKH,
 	STOK,
+	STXN,
 };
 
 extern const ChunkHandlerTable _stock_chunk_handlers(stock_chunk_handlers);

@@ -28,6 +28,7 @@ enum StockMarketWidgets : WidgetID {
 
 	/* Bottom panel - Stock Market */
 	WID_STM_MARKET_LABEL,         ///< Label for the market section.
+	WID_STM_SORT_DROPDOWN,        ///< Dropdown to select sort order.
 	WID_STM_COMPANY_LIST,         ///< Scrollable list of listed companies.
 	WID_STM_SCROLLBAR,            ///< Scrollbar for the company list.
 
@@ -35,6 +36,11 @@ enum StockMarketWidgets : WidgetID {
 	WID_STM_ORDER_BOOK_HEADER,    ///< Header label for the order book section.
 	WID_STM_ORDER_BOOK_PANEL,     ///< Panel displaying bid/ask depth for the selected company.
 	WID_STM_ORDER_BOOK_SCROLLBAR, ///< Scrollbar for the order book panel.
+
+	/* Transaction history panel */
+	WID_STM_TRANSACTION_HEADER,    ///< Header label for transaction history.
+	WID_STM_TRANSACTION_PANEL,     ///< Panel displaying recent transactions.
+	WID_STM_TRANSACTION_SCROLLBAR, ///< Scrollbar for transaction history.
 
 	WID_STM_BUY_BUTTON,          ///< Buy shares button.
 	WID_STM_SELL_BUTTON,          ///< Sell shares button.

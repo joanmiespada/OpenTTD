@@ -22,6 +22,7 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 CommandCost CmdPlaceBuyOrder(DoCommandFlags flags, CompanyID target, uint16_t units, Money bid_price);
 CommandCost CmdInitiateTakeover(DoCommandFlags flags, CompanyID target);
 CommandCost CmdExecuteTakeover(DoCommandFlags flags, CompanyID target);
+CommandCost CmdStockSplit(DoCommandFlags flags, bool execute_split);
 
 DEF_CMD_TRAIT(Commands::ListCompanyStock, CmdListCompanyStock, {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::PlaceSellOrder,   CmdPlaceSellOrder,   {}, CommandType::MoneyManagement)
@@ -31,6 +32,7 @@ DEF_CMD_TRAIT(Commands::BuybackStock,     CmdBuybackStock,     {}, CommandType::
 DEF_CMD_TRAIT(Commands::PlaceBuyOrder,     CmdPlaceBuyOrder,     {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::InitiateTakeover,  CmdInitiateTakeover,  {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::ExecuteTakeover,   CmdExecuteTakeover,   {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::StockSplit,        CmdStockSplit,        {}, CommandType::MoneyManagement)
 
 Money CalculateStockBaseValue(const struct Company *c);
 void UpdateStockPrices();

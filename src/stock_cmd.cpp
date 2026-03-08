@@ -98,6 +98,12 @@ void StockOrderBook::RemoveOrdersForCompany(CompanyID company)
 		std::remove_if(this->orders.begin(), this->orders.end(),
 			[company](const StockOrder &o) { return o.placer == company || o.target == company; }),
 		this->orders.end());
+
+	/* Also remove transactions referencing the removed company. */
+	this->transactions.erase(
+		std::remove_if(this->transactions.begin(), this->transactions.end(),
+			[company](const StockTransaction &t) { return t.buyer == company || t.target == company; }),
+		this->transactions.end());
 }
 
 /**
@@ -179,6 +185,33 @@ void StockOrderBook::ExpireOldOrders()
 }
 
 /**
+ * Record a completed trade in the transaction history.
+ * Keeps a rolling log of the last MAX_STOCK_TRANSACTIONS trades.
+ * @param date Date of the trade.
+ * @param buyer Company that bought the shares.
+ * @param target Company whose shares were traded.
+ * @param units Number of units traded.
+ * @param price Price per unit.
+ */
+void StockOrderBook::RecordTransaction(TimerGameEconomy::Date date, CompanyID buyer, CompanyID target, uint16_t units, Money price)
+{
+	StockTransaction txn;
+	txn.date = date;
+	txn.buyer = buyer;
+	txn.target = target;
+	txn.units = units;
+	txn.price_per_unit = price;
+	txn.total_value = price * units;
+	this->transactions.push_back(txn);
+
+	/* Trim to max size, keeping most recent entries. */
+	if (this->transactions.size() > MAX_STOCK_TRANSACTIONS) {
+		this->transactions.erase(this->transactions.begin(),
+			this->transactions.begin() + (this->transactions.size() - MAX_STOCK_TRANSACTIONS));
+	}
+}
+
+/**
  * Match buy and sell orders for a given target company.
  * Executes trades when a buy order's bid price >= a sell order's ask price.
  *
@@ -196,6 +229,9 @@ void StockOrderBook::MatchOrders(CompanyID target)
 
 	Company *target_co = Company::GetIfValid(target);
 	if (target_co == nullptr) return;
+
+	/* Capture the pre-match price for the circuit breaker clamp applied after the sweep. */
+	Money original_price = target_co->stock_info.share_price;
 
 	/* Collect pointers to all unfilled buy and sell orders for this target.
 	 * One O(n) pass over the full order book. */
@@ -285,9 +321,20 @@ void StockOrderBook::MatchOrders(CompanyID target)
 		best_sell->units_filled += trade_units;
 		target_co->stock_info.share_price = trade_price;
 
+		this->RecordTransaction(TimerGameEconomy::date, best_buy->placer, target, trade_units, trade_price);
+
 		/* Advance whichever side was fully filled. */
 		if (best_buy->IsFilled()) bi++;
 		if (best_sell->IsFilled()) si++;
+	}
+
+	/* Circuit breaker: clamp the final share price so it cannot deviate more than
+	 * STOCK_MAX_PRICE_CHANGE_PERCENT from the pre-match price in a single matching round.
+	 * This prevents a single flood of orders from crashing or spiking the price. */
+	if (original_price > 0) {
+		Money min_price = std::max<Money>(1, original_price * (100 - STOCK_MAX_PRICE_CHANGE_PERCENT) / 100);
+		Money max_price = original_price * (100 + STOCK_MAX_PRICE_CHANGE_PERCENT) / 100;
+		target_co->stock_info.share_price = std::clamp(target_co->stock_info.share_price, min_price, max_price);
 	}
 
 	this->RemoveFilledOrders();
@@ -345,6 +392,9 @@ void UpdateStockPrices()
 		if (!c->stock_info.listed) continue;
 
 		Money formula_price = CalculateFormulaPrice(c);
+
+		/* Save previous price for change indicators before updating. */
+		c->stock_info.prev_quarter_price = c->stock_info.share_price;
 
 		/* Decay toward formula price: weighted average (75% current, 25% formula). */
 		c->stock_info.share_price = (c->stock_info.share_price * 3 + formula_price) / 4;
@@ -693,6 +743,7 @@ CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16
 
 		/* Update order fill status. */
 		order->units_filled += units;
+		_stock_order_book.RecordTransaction(TimerGameEconomy::date, _current_company, order->target, units, order->ask_price);
 
 		/* Price discovery: update share price to last trade price. */
 		target_company->stock_info.share_price = order->ask_price;
@@ -742,6 +793,11 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 
 	uint16_t held_units = c->stock_info.GetHeldUnits();
 	uint16_t total_available = order_book_units + held_units;
+
+	/* Prevent complete delisting while a takeover defense is active. */
+	if (c->stock_info.takeover_defense_active && units >= c->stock_info.total_issued) {
+		return CommandCost(STR_ERROR_STOCK_CANNOT_DELIST_DURING_TAKEOVER);
+	}
 
 	if (units > total_available) {
 		return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK);
@@ -801,6 +857,7 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 			}
 
 			order->units_filled += take;
+			_stock_order_book.RecordTransaction(TimerGameEconomy::date, _current_company, _current_company, take, price);
 			remaining_to_buy -= take;
 
 			/* Price discovery: update share price. */
@@ -1043,6 +1100,59 @@ CommandCost CmdExecuteTakeover(DoCommandFlags flags, CompanyID target)
 	return CommandCost();
 }
 
+
+/**
+ * Perform a 2:1 stock split for the current company.
+ *
+ * Doubles the number of issued units and halves the share price, keeping the
+ * total market capitalisation the same.  All existing holdings and open orders
+ * targeting this company are adjusted proportionally.
+ *
+ * @param flags DoCommandFlags.
+ * @param execute_split Unused, required by command dispatch system.
+ * @return The cost of this operation or an error.
+ */
+CommandCost CmdStockSplit(DoCommandFlags flags, bool)
+{
+	if (!_settings_game.economy.stock_market) return CommandCost(STR_ERROR_STOCK_MARKET_DISABLED);
+
+	Company *c = Company::GetIfValid(_current_company);
+	if (c == nullptr) return CMD_ERROR;
+	if (!c->stock_info.listed) return CommandCost(STR_ERROR_STOCK_NOT_LISTED);
+	if (c->stock_info.share_price < STOCK_SPLIT_MIN_PRICE) return CommandCost(STR_ERROR_STOCK_SPLIT_PRICE_TOO_LOW);
+
+	/* Check we won't exceed MAX_STOCK_UNITS after doubling. */
+	uint16_t max_units = _settings_game.economy.stock_max_issue_percent * STOCK_UNIT_SCALE;
+	if (c->stock_info.total_issued * 2 > max_units) return CommandCost(STR_ERROR_STOCK_SPLIT_TOO_MANY_UNITS);
+
+	if (flags.Test(DoCommandFlag::Execute)) {
+		/* 2:1 split: double units, halve price. */
+		c->stock_info.total_issued *= 2;
+		c->stock_info.share_price /= 2;
+
+		/* Double all holders' units and halve their per-unit purchase price. */
+		for (auto &h : c->stock_info.holders) {
+			h.units *= 2;
+			h.purchase_price /= 2;
+		}
+
+		/* Adjust all orders targeting this company. */
+		for (auto &order : _stock_order_book.orders) {
+			if (order.target != _current_company) continue;
+			order.units *= 2;
+			order.units_filled *= 2;
+			order.ask_price /= 2;
+		}
+
+		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_SPLIT, _current_company),
+			NewsType::Economy, NewsStyle::Normal, {});
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
+	}
+
+	return CommandCost();
+}
+
 /**
  * Maximum number of market maker buy orders per listed company.
  * Two tiers: one close to fair value, one a bit further away.
@@ -1146,6 +1256,56 @@ static void RunMarketMaker()
 	InvalidateWindowClassesData(WC_STOCK_MARKET);
 }
 
+/** Minimum company value before AI auto-IPO (in currency units). */
+static constexpr Money AI_AUTO_IPO_MIN_VALUE = 100000;
+
+/** Number of units AI companies issue at auto-IPO (5% = 500 units). */
+static constexpr uint16_t AI_AUTO_IPO_UNITS = 500;
+
+/**
+ * Automatically list AI-controlled companies on the stock market once they are large enough.
+ *
+ * Called quarterly.  For each AI company that is not yet listed and whose company value
+ * meets AI_AUTO_IPO_MIN_VALUE, a sell order is created at the formula price so that human
+ * players can buy shares and initiate takeovers.
+ */
+static void AutoIPOForAICompanies()
+{
+	if (!_settings_game.economy.stock_market) return;
+
+	for (Company *c : Company::Iterate()) {
+		if (!c->is_ai) continue;
+		if (c->stock_info.listed) continue;
+
+		Money company_value = CalculateCompanyValue(c, true);
+		if (company_value < AI_AUTO_IPO_MIN_VALUE) continue;
+
+		/* Issue stock for this AI company. */
+		c->stock_info.listed = true;
+		c->stock_info.total_issued += AI_AUTO_IPO_UNITS;
+
+		Money formula_price = CalculateStockBaseValue(c) * _settings_game.economy.stock_max_issue_percent / 10000;
+		formula_price = std::max<Money>(formula_price, 1);
+		c->stock_info.share_price = formula_price;
+
+		/* Create a sell order. */
+		StockOrder order;
+		order.order_id = _stock_order_book.next_order_id++;
+		order.placer = c->index;
+		order.target = c->index;
+		order.units = AI_AUTO_IPO_UNITS;
+		order.units_filled = 0;
+		order.ask_price = formula_price;
+		order.creation_date = TimerGameEconomy::date;
+		_stock_order_book.orders.push_back(order);
+
+		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_IPO, c->index, AI_AUTO_IPO_UNITS, formula_price),
+			NewsType::Economy, NewsStyle::Normal, {});
+	}
+
+	InvalidateWindowClassesData(WC_STOCK_MARKET);
+}
+
 /** Timer for quarterly stock price updates. */
 static const IntervalTimer<TimerGameEconomy> _update_stock_prices({TimerGameEconomy::Trigger::Quarter, TimerGameEconomy::Priority::None}, [](auto) {
 	UpdateStockPrices();
@@ -1154,6 +1314,11 @@ static const IntervalTimer<TimerGameEconomy> _update_stock_prices({TimerGameEcon
 /** Timer for quarterly market maker order refresh. */
 static const IntervalTimer<TimerGameEconomy> _run_market_maker({TimerGameEconomy::Trigger::Quarter, TimerGameEconomy::Priority::None}, [](auto) {
 	RunMarketMaker();
+});
+
+/** Timer for quarterly AI auto-IPO. */
+static const IntervalTimer<TimerGameEconomy> _auto_ipo_ai({TimerGameEconomy::Trigger::Quarter, TimerGameEconomy::Priority::None}, [](auto) {
+	AutoIPOForAICompanies();
 });
 
 /** Timer for yearly dividend payments. */
