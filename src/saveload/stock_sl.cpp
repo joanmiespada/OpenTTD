@@ -21,7 +21,7 @@ static const SaveLoad _stock_order_desc[] = {
 	SLE_VAR(StockOrder, target,           SLE_UINT8),
 	SLE_VAR(StockOrder, units,            SLE_UINT16),
 	SLE_VAR(StockOrder, units_filled,     SLE_UINT16),
-	SLE_VAR(StockOrder, ask_price,        SLE_INT64),
+	SLE_VARNAME(StockOrder, price, "ask_price", SLE_INT64),
 	SLE_VAR(StockOrder, creation_date,    SLE_INT32),
 	SLE_CONDVAR(StockOrder, side,         SLE_UINT8, SLV_STOCK_MARKET_V2, SL_MAX_VERSION),
 	SLE_CONDVAR(StockOrder, is_market_maker, SLE_BOOL, SLV_STOCK_MARKET_V3, SL_MAX_VERSION),
@@ -141,13 +141,50 @@ struct STXNChunkHandler : ChunkHandler {
 	}
 };
 
+static const SaveLoad _stock_event_desc[] = {
+	SLE_CONDVAR(StockEvent, date,    SLE_INT32, SLV_STOCK_MARKET_V6, SL_MAX_VERSION),
+	SLE_CONDVAR(StockEvent, type,    SLE_UINT8, SLV_STOCK_MARKET_V6, SL_MAX_VERSION),
+	SLE_CONDVAR(StockEvent, company, SLE_UINT8, SLV_STOCK_MARKET_V6, SL_MAX_VERSION),
+	SLE_CONDVAR(StockEvent, price,   SLE_INT64, SLV_STOCK_MARKET_V6, SL_MAX_VERSION),
+};
+
+struct STEVChunkHandler : ChunkHandler {
+	STEVChunkHandler() : ChunkHandler('STEV', CH_TABLE) {}
+
+	void Save() const override
+	{
+		SlTableHeader(_stock_event_desc);
+
+		for (size_t i = 0; i < _stock_order_book.events.size(); i++) {
+			SlSetArrayIndex(static_cast<int>(i));
+			SlObject(&_stock_order_book.events[i], _stock_event_desc);
+		}
+	}
+
+	void Load() const override
+	{
+		const std::vector<SaveLoad> slt = SlTableHeader(_stock_event_desc);
+
+		_stock_order_book.events.clear();
+
+		int index;
+		while ((index = SlIterateArray()) != -1) {
+			StockEvent ev;
+			SlObject(&ev, slt);
+			_stock_order_book.events.push_back(ev);
+		}
+	}
+};
+
 static const STOKChunkHandler STOK;
 static const STKHChunkHandler STKH;
 static const STXNChunkHandler STXN;
+static const STEVChunkHandler STEV;
 static const ChunkHandlerRef stock_chunk_handlers[] = {
 	STKH,
 	STOK,
 	STXN,
+	STEV,
 };
 
 extern const ChunkHandlerTable _stock_chunk_handlers(stock_chunk_handlers);

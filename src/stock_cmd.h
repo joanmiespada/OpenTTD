@@ -15,7 +15,7 @@
 #include "stock_type.h"
 
 CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue, Money ipo_price);
-CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t units, Money ask_price);
+CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t units, Money price);
 CommandCost CmdCancelSellOrder(DoCommandFlags flags, StockOrderID order_id);
 CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16_t units);
 CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_price);

@@ -54,6 +54,8 @@ private:
 	int col_yield_width = 0;                     ///< Width of dividend yield column.
 	CompanyID selected_company = CompanyID::Invalid(); ///< Currently selected company in market list.
 	CompanyID selected_investment = CompanyID::Invalid(); ///< Currently selected investment.
+	bool filter_holdings_only = false; ///< When true, only show companies the player holds shares in.
+	StockOrderID selected_order_id = INVALID_STOCK_ORDER_ID; ///< Currently selected order in the order book.
 
 	/** Sort modes for the market list. */
 	enum StockSortMode {
@@ -91,9 +93,10 @@ private:
 
 		this->market_companies.clear();
 		for (const Company *c : Company::Iterate()) {
-			if (c->stock_info.listed) {
-				this->market_companies.push_back(c);
-			}
+			if (!c->stock_info.listed) continue;
+			/* When the holdings filter is active, only include companies the local player holds shares in. */
+			if (this->filter_holdings_only && c->stock_info.FindHolder(_local_company) == nullptr) continue;
+			this->market_companies.push_back(c);
 		}
 		this->market_companies.RebuildDone();
 	}
@@ -152,7 +155,7 @@ private:
 		for (const auto &order : _stock_order_book.orders) {
 			if (order.target != target) continue;
 			if (order.GetRemainingUnits() == 0) continue;
-			if (cheapest == nullptr || order.ask_price < cheapest->ask_price) {
+			if (cheapest == nullptr || order.price < cheapest->price) {
 				cheapest = &order;
 			}
 		}
@@ -233,6 +236,18 @@ public:
 		/* Disable sell investment button if no investment selected. */
 		this->SetWidgetDisabledState(WID_STM_SELL_INVESTMENT_BUTTON, this->selected_investment == CompanyID::Invalid());
 
+		/* Disable cancel order button if no order is selected or the order no longer exists. */
+		bool can_cancel = false;
+		if (this->selected_order_id != INVALID_STOCK_ORDER_ID) {
+			const StockOrder *sel_order = _stock_order_book.FindOrder(this->selected_order_id);
+			can_cancel = (sel_order != nullptr && sel_order->placer == _local_company);
+		}
+		this->SetWidgetDisabledState(WID_STM_CANCEL_ORDER_BUTTON, !can_cancel);
+
+		/* Update filter toggle button text. */
+		this->GetWidget<NWidgetCore>(WID_STM_FILTER_TOGGLE)->SetString(
+			this->filter_holdings_only ? STR_STOCK_FILTER_HOLDINGS : STR_STOCK_FILTER_ALL);
+
 		this->DrawWidgets();
 	}
 
@@ -306,6 +321,18 @@ public:
 				}
 			}
 		}
+
+		/* Fourth row - Cash position and last-quarter profit */
+		DrawString(ir.left, mid - 4, y + GetCharacterHeight(FS_NORMAL) * 4,
+			GetString(STR_STOCK_INFO_CASH, my->money));
+		if (my->num_valid_stat_ent > 0) {
+			Money last_quarter_profit = my->old_economy[0].income + my->old_economy[0].expenses;
+			DrawString(mid + 4, ir.right, y + GetCharacterHeight(FS_NORMAL) * 4,
+				GetString(STR_STOCK_INFO_LAST_PROFIT, last_quarter_profit));
+		}
+
+		/* Fifth row - Dividend schedule */
+		DrawString(ir.left, ir.right, y + GetCharacterHeight(FS_NORMAL) * 5, STR_STOCK_DIVIDEND_SCHEDULE);
 	}
 
 	/** Draw the shareholders scrollable panel. */
@@ -400,6 +427,21 @@ public:
 		int text_y_offset = (this->line_height - GetCharacterHeight(FS_NORMAL)) / 2;
 		int icon_y_offset = (this->line_height - this->icon.height) / 2;
 
+		/* Market statistics summary line. */
+		{
+			int listed_count = 0;
+			Money total_market_cap = 0;
+			for (const Company *c : Company::Iterate()) {
+				if (!c->stock_info.listed) continue;
+				listed_count++;
+				total_market_cap += c->stock_info.share_price * static_cast<int64_t>(c->stock_info.total_issued);
+			}
+			Money avg_price = (listed_count > 0) ? (total_market_cap / listed_count) : Money(0);
+			DrawString(ir.left, ir.right, ir.top + text_y_offset,
+				GetString(STR_STOCK_MARKET_STATS, listed_count, total_market_cap, avg_price));
+			ir.top += this->line_height;
+		}
+
 		/* Compute column positions from pre-calculated widths. */
 		int col_price = ir.left + this->col_company_width;
 		int col_avail = col_price + this->col_price_width;
@@ -429,9 +471,18 @@ public:
 
 			DrawCompanyIcon(c->index, ir.left, ir.top + icon_y_offset);
 
-			/* Company name */
+			/* Company name - use TC_ORANGE warning when price swung >20% from previous quarter. */
+			TextColour name_colour = selected ? TC_WHITE : TC_BLACK;
+			if (!selected && c->stock_info.prev_quarter_price > 0) {
+				Money swing = c->stock_info.share_price - c->stock_info.prev_quarter_price;
+				/* Use absolute percentage change: |change| / prev * 100 > 20 */
+				if (swing < 0) swing = -swing;
+				if (swing * 100 / c->stock_info.prev_quarter_price > 20) {
+					name_colour = TC_ORANGE;
+				}
+			}
 			DrawString(ir.left + this->icon.width + 4, col_price, ir.top + text_y_offset,
-				GetString(STR_COMPANY_NAME, c->index), selected ? TC_WHITE : TC_BLACK);
+				GetString(STR_COMPANY_NAME, c->index), name_colour);
 
 			/* Share price */
 			DrawString(col_price, col_avail, ir.top + text_y_offset,
@@ -524,10 +575,10 @@ public:
 
 		/* Sort: bids highest price first, asks lowest price first. */
 		std::sort(bids.begin(), bids.end(), [](const StockOrder *a, const StockOrder *b) {
-			return a->ask_price > b->ask_price;
+			return a->price > b->price;
 		});
 		std::sort(asks.begin(), asks.end(), [](const StockOrder *a, const StockOrder *b) {
-			return a->ask_price < b->ask_price;
+			return a->price < b->price;
 		});
 
 		/* Determine visible row range via scrollbar. */
@@ -545,15 +596,25 @@ public:
 			/* Left half: bid entry */
 			if (i < static_cast<int>(bids.size())) {
 				const StockOrder *bid = bids[i];
+				bool bid_selected = (bid->order_id == this->selected_order_id);
+				if (bid_selected) {
+					GfxFillRect(ir.left, ir.top, mid - WidgetDimensions::scaled.hsep_normal, ir.top + this->line_height - 1, PC_DARK_BLUE);
+				}
 				DrawString(ir.left, mid - WidgetDimensions::scaled.hsep_normal, ir.top + text_y_offset,
-					GetString(STR_STOCK_ORDER_BOOK_ENTRY_BID, bid->ask_price, bid->GetRemainingUnits()));
+					GetString(STR_STOCK_ORDER_BOOK_ENTRY_BID, bid->price, bid->GetRemainingUnits()),
+					bid_selected ? TC_WHITE : TC_FROMSTRING);
 			}
 
 			/* Right half: ask entry */
 			if (i < static_cast<int>(asks.size())) {
 				const StockOrder *ask = asks[i];
+				bool ask_selected = (ask->order_id == this->selected_order_id);
+				if (ask_selected) {
+					GfxFillRect(mid + WidgetDimensions::scaled.hsep_normal, ir.top, ir.right, ir.top + this->line_height - 1, PC_DARK_BLUE);
+				}
 				DrawString(mid + WidgetDimensions::scaled.hsep_normal, ir.right, ir.top + text_y_offset,
-					GetString(STR_STOCK_ORDER_BOOK_ENTRY_ASK, ask->ask_price, ask->GetRemainingUnits()));
+					GetString(STR_STOCK_ORDER_BOOK_ENTRY_ASK, ask->price, ask->GetRemainingUnits()),
+					ask_selected ? TC_WHITE : TC_FROMSTRING);
 			}
 
 			ir.top += this->line_height;
@@ -597,7 +658,8 @@ public:
 			case WID_STM_MY_COMPANY_PANEL:
 				this->icon = GetSpriteSize(SPR_COMPANY_ICON);
 				this->line_height = std::max<int>(this->icon.height + WidgetDimensions::scaled.vsep_normal, GetCharacterHeight(FS_NORMAL) + 2);
-				size.height = GetCharacterHeight(FS_NORMAL) * 4 + WidgetDimensions::scaled.framerect.Vertical();
+				/* 6 lines: rows 0-3 existing info, row 4 cash/last-profit, row 5 dividend schedule. */
+				size.height = GetCharacterHeight(FS_NORMAL) * 6 + WidgetDimensions::scaled.framerect.Vertical();
 				break;
 
 			case WID_STM_SHAREHOLDERS_PANEL:
@@ -611,8 +673,8 @@ public:
 				break;
 
 			case WID_STM_COMPANY_LIST: {
-				/* Header line + space for companies. */
-				size.height = this->line_height * (MAX_COMPANIES + 1) + WidgetDimensions::scaled.framerect.Vertical();
+				/* Stats line + header line + space for companies. */
+				size.height = this->line_height * (MAX_COMPANIES + 2) + WidgetDimensions::scaled.framerect.Vertical();
 				resize.height = this->line_height;
 
 				/* Compute column widths based on header string widths and representative content. */
@@ -691,8 +753,8 @@ public:
 
 			case WID_STM_COMPANY_LIST: {
 				Rect r = this->GetWidget<NWidgetBase>(widget)->GetCurrentRect().Shrink(WidgetDimensions::scaled.framerect);
-				/* Account for header line. */
-				int row = (pt.y - r.top - this->line_height) / this->line_height;
+				/* Account for stats summary line + header line. */
+				int row = (pt.y - r.top - this->line_height * 2) / this->line_height;
 				row += this->market_vscroll->GetPosition();
 				if (row >= 0 && row < static_cast<int>(this->market_companies.size())) {
 					this->selected_company = this->market_companies[row]->index;
@@ -745,6 +807,60 @@ public:
 					ShowQueryString({}, STR_STOCK_MARKET_BUY_QUERY, 10, this, CS_NUMERAL, {});
 					this->active_query = QUERY_BUY_STOCK;
 				}
+				break;
+			}
+
+			case WID_STM_FILTER_TOGGLE:
+				this->filter_holdings_only = !this->filter_holdings_only;
+				this->market_companies.ForceRebuild();
+				this->SetDirty();
+				break;
+
+			case WID_STM_CANCEL_ORDER_BUTTON: {
+				if (this->selected_order_id == INVALID_STOCK_ORDER_ID) break;
+				Command<Commands::CancelSellOrder>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_order_id);
+				this->selected_order_id = INVALID_STOCK_ORDER_ID;
+				break;
+			}
+
+			case WID_STM_ORDER_BOOK_PANEL: {
+				/* Click in the order book panel to select an order for cancellation. */
+				if (this->selected_company == CompanyID::Invalid()) break;
+				Rect r = this->GetWidget<NWidgetBase>(widget)->GetCurrentRect().Shrink(WidgetDimensions::scaled.framerect);
+				/* Skip the header row. */
+				int row = (pt.y - r.top - this->line_height) / this->line_height;
+				row += this->order_book_vscroll->GetPosition();
+
+				/* Build the same sorted order lists as DrawOrderBook. */
+				std::vector<const StockOrder *> bids;
+				std::vector<const StockOrder *> asks;
+				for (const auto &order : _stock_order_book.orders) {
+					if (order.target != this->selected_company) continue;
+					if (order.GetRemainingUnits() == 0) continue;
+					if (order.IsBuyOrder()) {
+						bids.push_back(&order);
+					} else {
+						asks.push_back(&order);
+					}
+				}
+				std::sort(bids.begin(), bids.end(), [](const StockOrder *a, const StockOrder *b) {
+					return a->price > b->price;
+				});
+				std::sort(asks.begin(), asks.end(), [](const StockOrder *a, const StockOrder *b) {
+					return a->price < b->price;
+				});
+
+				/* Determine which side was clicked (left = bids, right = asks). */
+				int mid = (r.left + r.right) / 2;
+				this->selected_order_id = INVALID_STOCK_ORDER_ID;
+				if (row >= 0) {
+					if (pt.x < mid && row < static_cast<int>(bids.size())) {
+						this->selected_order_id = bids[row]->order_id;
+					} else if (pt.x >= mid && row < static_cast<int>(asks.size())) {
+						this->selected_order_id = asks[row]->order_id;
+					}
+				}
+				this->SetDirty();
 				break;
 			}
 
@@ -917,6 +1033,7 @@ static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets
 		NWidget(NWID_VERTICAL), SetPadding(WidgetDimensions::unscaled.framerect),
 			NWidget(NWID_HORIZONTAL),
 				NWidget(WWT_TEXT, INVALID_COLOUR, WID_STM_MARKET_LABEL), SetStringTip(STR_STOCK_MARKET_TITLE), SetFill(1, 0),
+				NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_FILTER_TOGGLE), SetMinimalSize(100, 12), SetStringTip(STR_STOCK_FILTER_ALL, STR_STOCK_FILTER_TOGGLE_TOOLTIP),
 				NWidget(WWT_DROPDOWN, COLOUR_BROWN, WID_STM_SORT_DROPDOWN), SetStringTip(STR_STOCK_SORT_PRICE), SetMinimalSize(100, 12),
 			EndContainer(),
 		EndContainer(),
@@ -938,6 +1055,7 @@ static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets
 		EndContainer(),
 		NWidget(NWID_VSCROLLBAR, COLOUR_BROWN, WID_STM_ORDER_BOOK_SCROLLBAR),
 	EndContainer(),
+	NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_CANCEL_ORDER_BUTTON), SetFill(1, 0), SetStringTip(STR_STOCK_CANCEL_ORDER, STR_STOCK_CANCEL_ORDER_TOOLTIP),
 
 	/* Transaction history panel. */
 	NWidget(WWT_PANEL, COLOUR_BROWN),

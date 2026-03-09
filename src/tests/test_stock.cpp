@@ -27,7 +27,7 @@ static StockHolding MakeHolding(CompanyID owner, uint16_t units, Money price)
 }
 
 /** Helper to create a StockOrder with common fields. */
-static StockOrder MakeOrder(StockOrderID id, CompanyID placer, CompanyID target, uint16_t units, uint16_t filled = 0, Money ask_price = 100)
+static StockOrder MakeOrder(StockOrderID id, CompanyID placer, CompanyID target, uint16_t units, uint16_t filled = 0, Money order_price = 100)
 {
 	StockOrder o;
 	o.order_id = id;
@@ -35,7 +35,7 @@ static StockOrder MakeOrder(StockOrderID id, CompanyID placer, CompanyID target,
 	o.target = target;
 	o.units = units;
 	o.units_filled = filled;
-	o.ask_price = ask_price;
+	o.price = order_price;
 	return o;
 }
 
@@ -370,7 +370,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		buy.target   = target;
 		buy.units    = 10;
 		buy.units_filled = 0;
-		buy.ask_price = 50;
+		buy.price = 50;
 		buy.side      = StockOrderSide::Buy;
 
 		StockOrder sell;
@@ -379,7 +379,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		sell.target   = target;
 		sell.units    = 10;
 		sell.units_filled = 0;
-		sell.ask_price = 100;
+		sell.price = 100;
 		sell.side      = StockOrderSide::Sell;
 
 		book.orders.push_back(buy);
@@ -403,7 +403,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		buy.target    = target;
 		buy.units     = 10;
 		buy.units_filled = 0;
-		buy.ask_price = 200;
+		buy.price = 200;
 		buy.side      = StockOrderSide::Buy;
 
 		StockOrder sell;
@@ -412,7 +412,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		sell.target    = target;
 		sell.units     = 10;
 		sell.units_filled = 0;
-		sell.ask_price = 100;
+		sell.price = 100;
 		sell.side      = StockOrderSide::Sell;
 
 		book.orders.push_back(buy);
@@ -435,7 +435,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		buy.target    = other_target;
 		buy.units     = 10;
 		buy.units_filled = 0;
-		buy.ask_price = 200;
+		buy.price = 200;
 		buy.side      = StockOrderSide::Buy;
 
 		StockOrder sell;
@@ -444,7 +444,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		sell.target    = other_target;
 		sell.units     = 10;
 		sell.units_filled = 0;
-		sell.ask_price = 100;
+		sell.price = 100;
 		sell.side      = StockOrderSide::Sell;
 
 		book.orders.push_back(buy);
@@ -467,7 +467,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		filled.target      = target;
 		filled.units       = 5;
 		filled.units_filled = 5; /* already filled */
-		filled.ask_price   = 100;
+		filled.price   = 100;
 		filled.side        = StockOrderSide::Sell;
 
 		StockOrder open;
@@ -476,7 +476,7 @@ TEST_CASE("StockOrderBook::MatchOrders - no Company objects available")
 		open.target      = target;
 		open.units       = 5;
 		open.units_filled = 0;
-		open.ask_price   = 100;
+		open.price   = 100;
 		open.side        = StockOrderSide::Sell;
 
 		book.orders.push_back(filled);
@@ -632,7 +632,7 @@ TEST_CASE("StockOrderBook::ExpireOldOrders")
 		order.target = static_cast<CompanyID>(1);
 		order.units = 10;
 		order.units_filled = 0;
-		order.ask_price = 100;
+		order.price = 100;
 		order.creation_date = TimerGameEconomy::Date(900); /* 100 days old, < 180 */
 		book.orders.push_back(order);
 
@@ -647,7 +647,7 @@ TEST_CASE("StockOrderBook::ExpireOldOrders")
 		order.target = static_cast<CompanyID>(1);
 		order.units = 10;
 		order.units_filled = 0;
-		order.ask_price = 100;
+		order.price = 100;
 		order.creation_date = TimerGameEconomy::Date(500); /* 500 days old, >= 180 */
 		book.orders.push_back(order);
 
@@ -662,7 +662,7 @@ TEST_CASE("StockOrderBook::ExpireOldOrders")
 		order.target = static_cast<CompanyID>(1);
 		order.units = 10;
 		order.units_filled = 0;
-		order.ask_price = 100;
+		order.price = 100;
 		order.creation_date = TimerGameEconomy::Date(0); /* very old */
 		order.is_market_maker = true;
 		book.orders.push_back(order);
@@ -679,7 +679,7 @@ TEST_CASE("StockOrderBook::ExpireOldOrders")
 		fresh.target = static_cast<CompanyID>(1);
 		fresh.units = 5;
 		fresh.units_filled = 0;
-		fresh.ask_price = 50;
+		fresh.price = 50;
 		fresh.creation_date = TimerGameEconomy::Date(950);
 		book.orders.push_back(fresh);
 
@@ -690,7 +690,7 @@ TEST_CASE("StockOrderBook::ExpireOldOrders")
 		old_order.target = static_cast<CompanyID>(1);
 		old_order.units = 5;
 		old_order.units_filled = 0;
-		old_order.ask_price = 50;
+		old_order.price = 50;
 		old_order.creation_date = TimerGameEconomy::Date(100);
 		book.orders.push_back(old_order);
 
@@ -701,7 +701,7 @@ TEST_CASE("StockOrderBook::ExpireOldOrders")
 		mm.target = static_cast<CompanyID>(1);
 		mm.units = 5;
 		mm.units_filled = 0;
-		mm.ask_price = 50;
+		mm.price = 50;
 		mm.creation_date = TimerGameEconomy::Date(0);
 		mm.is_market_maker = true;
 		book.orders.push_back(mm);
@@ -711,5 +711,377 @@ TEST_CASE("StockOrderBook::ExpireOldOrders")
 		CHECK(book.FindOrder(1) != nullptr); /* fresh: kept */
 		CHECK(book.FindOrder(2) == nullptr); /* old: removed */
 		CHECK(book.FindOrder(3) != nullptr); /* MM: kept */
+	}
+}
+
+/* ------------------------------------------------------------------ */
+/* Additional tests requested for improved coverage                     */
+/* ------------------------------------------------------------------ */
+
+TEST_CASE("StockSplit rounding")
+{
+	/* Verify integer truncation semantics for the 2:1 split:
+	 * price/2 truncates toward zero, so an odd price loses one unit. */
+
+	SECTION("odd share price halves correctly (truncates)") {
+		/* 10001 / 2 == 5000 (integer division). */
+		Money price = 10001;
+		CHECK(price / 2 == 5000);
+	}
+
+	SECTION("holder units double and purchase_price halves after split") {
+		/* Simulate what CmdStockSplit does to each StockHolding. */
+		StockHolding h;
+		h.owner = CompanyID{0};
+		h.units = 50;
+		h.purchase_price = 10001;
+
+		/* Apply the split transform. */
+		h.units *= 2;
+		h.purchase_price /= 2;
+
+		CHECK(h.units == 100);
+		CHECK(h.purchase_price == 5000); /* truncated */
+	}
+
+	SECTION("even share price halves exactly") {
+		StockHolding h;
+		h.owner = CompanyID{0};
+		h.units = 30;
+		h.purchase_price = 20000;
+
+		h.units *= 2;
+		h.purchase_price /= 2;
+
+		CHECK(h.units == 60);
+		CHECK(h.purchase_price == 10000);
+	}
+
+	SECTION("order units double and price halves after split") {
+		/* Simulate what CmdStockSplit does to each StockOrder. */
+		StockOrder order = MakeOrder(1, CompanyID{0}, CompanyID{1}, 10, 2, /*order_price=*/10001);
+
+		order.units *= 2;
+		order.units_filled *= 2;
+		order.price /= 2;
+
+		CHECK(order.units == 20);
+		CHECK(order.units_filled == 4);
+		CHECK(order.price == 5000);
+	}
+}
+
+TEST_CASE("StockOrderBook::RecordTransaction boundary conditions")
+{
+	StockOrderBook book;
+	CompanyID c0{0};
+	CompanyID c1{1};
+
+	SECTION("recording exactly MAX_STOCK_TRANSACTIONS entries fills the log") {
+		for (uint16_t i = 0; i < MAX_STOCK_TRANSACTIONS; i++) {
+			book.RecordTransaction(TimerGameEconomy::Date(i), c0, c1, 1, Money(10));
+		}
+		CHECK(book.transactions.size() == MAX_STOCK_TRANSACTIONS);
+		/* The oldest entry should be date 0. */
+		CHECK(book.transactions.front().date == TimerGameEconomy::Date(0));
+	}
+
+	SECTION("one more than MAX_STOCK_TRANSACTIONS drops the oldest entry") {
+		for (uint16_t i = 0; i < MAX_STOCK_TRANSACTIONS; i++) {
+			book.RecordTransaction(TimerGameEconomy::Date(i), c0, c1, 1, Money(10));
+		}
+		/* Push one more - this should evict entry with date 0. */
+		book.RecordTransaction(TimerGameEconomy::Date(MAX_STOCK_TRANSACTIONS), c0, c1, 1, Money(10));
+
+		CHECK(book.transactions.size() == MAX_STOCK_TRANSACTIONS);
+		/* Oldest surviving entry should now be date 1, not 0. */
+		CHECK(book.transactions.front().date == TimerGameEconomy::Date(1));
+		/* Most recent should be the last one added. */
+		CHECK(book.transactions.back().date == TimerGameEconomy::Date(MAX_STOCK_TRANSACTIONS));
+	}
+
+	SECTION("recording with zero units stores zero total_value") {
+		book.RecordTransaction(TimerGameEconomy::Date(1), c0, c1, 0, Money(100));
+		REQUIRE(book.transactions.size() == 1);
+		CHECK(book.transactions[0].units == 0);
+		CHECK(book.transactions[0].total_value == 0);
+	}
+
+	SECTION("recording with zero price stores zero total_value") {
+		book.RecordTransaction(TimerGameEconomy::Date(1), c0, c1, 10, Money(0));
+		REQUIRE(book.transactions.size() == 1);
+		CHECK(book.transactions[0].price_per_unit == 0);
+		CHECK(book.transactions[0].total_value == 0);
+	}
+}
+
+TEST_CASE("StockOrderBook::MatchOrders order-book-only cases")
+{
+	/* MatchOrders requires Company::GetIfValid() which is unavailable in tests.
+	 * All sections below verify the behaviour that is observable without a game
+	 * environment: self-trade prevention, one-sided books, circuit breaker
+	 * semantics (the price cannot be updated without a Company object, so the
+	 * circuit-breaker path is implicitly untested here), and order cleanup. */
+
+	StockOrderBook book;
+	CompanyID c0{0};
+	CompanyID c1{1};
+	CompanyID target{2};
+
+	SECTION("only buy orders - no match possible") {
+		/* Without any sell orders there is nothing to match against. */
+		StockOrder buy1 = MakeOrder(1, c0, target, 10, 0, 200);
+		buy1.side = StockOrderSide::Buy;
+		StockOrder buy2 = MakeOrder(2, c1, target, 5, 0, 150);
+		buy2.side = StockOrderSide::Buy;
+
+		book.orders.push_back(buy1);
+		book.orders.push_back(buy2);
+
+		book.MatchOrders(target);
+
+		/* Both buy orders must still be present and unfilled. */
+		REQUIRE(book.orders.size() == 2);
+		CHECK(book.FindOrder(1)->units_filled == 0);
+		CHECK(book.FindOrder(2)->units_filled == 0);
+	}
+
+	SECTION("only sell orders - no match possible") {
+		StockOrder sell1 = MakeOrder(1, c0, target, 10, 0, 100);
+		sell1.side = StockOrderSide::Sell;
+		StockOrder sell2 = MakeOrder(2, c1, target, 5, 0, 120);
+		sell2.side = StockOrderSide::Sell;
+
+		book.orders.push_back(sell1);
+		book.orders.push_back(sell2);
+
+		book.MatchOrders(target);
+
+		/* Both sell orders must still be present and unfilled. */
+		REQUIRE(book.orders.size() == 2);
+		CHECK(book.FindOrder(1)->units_filled == 0);
+		CHECK(book.FindOrder(2)->units_filled == 0);
+	}
+
+	SECTION("self-trade prevention: same placer buy and sell do not fill") {
+		/* bid (200) >= ask (100) would normally match, but same placer prevents it. */
+		StockOrder buy = MakeOrder(1, c0, target, 10, 0, 200);
+		buy.side = StockOrderSide::Buy;
+		StockOrder sell = MakeOrder(2, c0, target, 10, 0, 100); /* same placer */
+		sell.side = StockOrderSide::Sell;
+
+		book.orders.push_back(buy);
+		book.orders.push_back(sell);
+
+		book.MatchOrders(target);
+
+		REQUIRE(book.orders.size() == 2);
+		CHECK(book.FindOrder(1)->units_filled == 0);
+		CHECK(book.FindOrder(2)->units_filled == 0);
+	}
+}
+
+TEST_CASE("StockOrderBook::MatchOrders circuit breaker (no game environment)")
+{
+	/* Without a live Company, MatchOrders returns early after RemoveFilledOrders().
+	 * The circuit-breaker clamp on share_price therefore never fires in unit tests.
+	 * This test documents that behaviour explicitly and verifies STOCK_MAX_PRICE_CHANGE_PERCENT
+	 * is the constant used by the clamp formula (50 %). */
+
+	SECTION("STOCK_MAX_PRICE_CHANGE_PERCENT is 50") {
+		CHECK(STOCK_MAX_PRICE_CHANGE_PERCENT == 50);
+	}
+
+	SECTION("circuit breaker clamp formula: price within range is unchanged") {
+		/* The clamp is: new_price = clamp(new_price, original*(100-pct)/100, original*(100+pct)/100).
+		 * Verify for a concrete value that doesn't change (already in range). */
+		Money original_price = 1000;
+		Money new_price      = 1200; /* +20 %, within +-50 % */
+
+		Money min_price = std::max<Money>(1, original_price * (100 - STOCK_MAX_PRICE_CHANGE_PERCENT) / 100);
+		Money max_price = original_price * (100 + STOCK_MAX_PRICE_CHANGE_PERCENT) / 100;
+		Money clamped   = std::clamp(new_price, min_price, max_price);
+
+		CHECK(min_price == 500);
+		CHECK(max_price == 1500);
+		CHECK(clamped == 1200); /* unchanged */
+	}
+
+	SECTION("circuit breaker clamp formula: price above ceiling is clamped") {
+		Money original_price = 1000;
+		Money new_price      = 2000; /* +100 %, above +50 % ceiling */
+
+		Money min_price = std::max<Money>(1, original_price * (100 - STOCK_MAX_PRICE_CHANGE_PERCENT) / 100);
+		Money max_price = original_price * (100 + STOCK_MAX_PRICE_CHANGE_PERCENT) / 100;
+		Money clamped   = std::clamp(new_price, min_price, max_price);
+
+		CHECK(clamped == 1500); /* clamped to max */
+	}
+
+	SECTION("circuit breaker clamp formula: price below floor is clamped") {
+		Money original_price = 1000;
+		Money new_price      = 100; /* -90 %, below -50 % floor */
+
+		Money min_price = std::max<Money>(1, original_price * (100 - STOCK_MAX_PRICE_CHANGE_PERCENT) / 100);
+		Money max_price = original_price * (100 + STOCK_MAX_PRICE_CHANGE_PERCENT) / 100;
+		Money clamped   = std::clamp(new_price, min_price, max_price);
+
+		CHECK(clamped == 500); /* clamped to min */
+	}
+}
+
+TEST_CASE("StockOrderBook::FindOrder with INVALID_STOCK_ORDER_ID")
+{
+	StockOrderBook book;
+	CompanyID c0{0};
+
+	SECTION("empty book returns nullptr for INVALID_STOCK_ORDER_ID") {
+		CHECK(book.FindOrder(INVALID_STOCK_ORDER_ID) == nullptr);
+	}
+
+	SECTION("non-empty book returns nullptr for INVALID_STOCK_ORDER_ID") {
+		book.orders.push_back(MakeOrder(1, c0, c0, 10));
+		book.orders.push_back(MakeOrder(2, c0, c0, 5));
+		CHECK(book.FindOrder(INVALID_STOCK_ORDER_ID) == nullptr);
+	}
+
+	SECTION("const version returns nullptr for INVALID_STOCK_ORDER_ID") {
+		book.orders.push_back(MakeOrder(10, c0, c0, 10));
+		const StockOrderBook &cbook = book;
+		CHECK(cbook.FindOrder(INVALID_STOCK_ORDER_ID) == nullptr);
+	}
+}
+
+TEST_CASE("StockOrderBook::RemoveOrdersForCompany comprehensive")
+{
+	StockOrderBook book;
+	CompanyID c0{0};
+	CompanyID c1{1};
+	CompanyID c2{2};
+
+	SECTION("removes orders where company is both placer and target (self-IPO)") {
+		book.orders.push_back(MakeOrder(0, c0, c0, 10)); /* c0 IPO order */
+		book.orders.push_back(MakeOrder(1, c1, c1, 10)); /* c1 IPO order (unrelated) */
+
+		book.RemoveOrdersForCompany(c0);
+
+		CHECK(book.orders.size() == 1);
+		CHECK(book.FindOrder(0) == nullptr);
+		CHECK(book.FindOrder(1) != nullptr);
+	}
+
+	SECTION("removes orders where company is only placer") {
+		book.orders.push_back(MakeOrder(0, c0, c1, 10)); /* c0 sells c1 stock */
+		book.orders.push_back(MakeOrder(1, c2, c1, 5));  /* unrelated */
+
+		book.RemoveOrdersForCompany(c0);
+
+		CHECK(book.orders.size() == 1);
+		CHECK(book.FindOrder(0) == nullptr);
+		CHECK(book.FindOrder(1) != nullptr);
+	}
+
+	SECTION("removes orders where company is only target") {
+		book.orders.push_back(MakeOrder(0, c1, c0, 10)); /* c1 sells c0 stock */
+		book.orders.push_back(MakeOrder(1, c2, c0, 5));  /* c2 sells c0 stock */
+		book.orders.push_back(MakeOrder(2, c0, c1, 3));  /* c0 sells c1 stock — unrelated */
+
+		book.RemoveOrdersForCompany(c0);
+
+		/* Orders 0 and 1 target c0 (removed). Order 2 has c0 as placer (also removed). */
+		CHECK(book.orders.empty());
+	}
+
+	SECTION("removes both placer and target orders in one call") {
+		book.orders.push_back(MakeOrder(0, c0, c1, 10)); /* c0 as placer */
+		book.orders.push_back(MakeOrder(1, c1, c0, 5));  /* c0 as target */
+		book.orders.push_back(MakeOrder(2, c1, c2, 3));  /* unrelated */
+
+		book.RemoveOrdersForCompany(c0);
+
+		CHECK(book.orders.size() == 1);
+		CHECK(book.FindOrder(0) == nullptr);
+		CHECK(book.FindOrder(1) == nullptr);
+		CHECK(book.FindOrder(2) != nullptr);
+	}
+
+	SECTION("also clears transactions involving the company") {
+		book.RecordTransaction(TimerGameEconomy::Date(1), c0, c1, 5, Money(100));
+		book.RecordTransaction(TimerGameEconomy::Date(2), c1, c0, 3, Money(200));
+		book.RecordTransaction(TimerGameEconomy::Date(3), c1, c2, 1, Money(50));
+
+		book.RemoveOrdersForCompany(c0);
+
+		/* Only transaction 3 (c1->c2, no c0 involvement) should remain. */
+		CHECK(book.transactions.size() == 1);
+		CHECK(book.transactions[0].buyer == c1);
+		CHECK(book.transactions[0].target == c2);
+	}
+}
+
+TEST_CASE("StockOrderBook::RecordEvent")
+{
+	StockOrderBook book;
+	CompanyID c0{0};
+
+	SECTION("records a single event with correct fields") {
+		book.RecordEvent(TimerGameEconomy::Date(42), StockEventType::IPO, c0, Money(500));
+
+		REQUIRE(book.events.size() == 1);
+		CHECK(book.events[0].date    == TimerGameEconomy::Date(42));
+		CHECK(book.events[0].type    == StockEventType::IPO);
+		CHECK(book.events[0].company == c0);
+		CHECK(book.events[0].price   == 500);
+	}
+
+	SECTION("multiple events are recorded in insertion order") {
+		book.RecordEvent(TimerGameEconomy::Date(1), StockEventType::IPO,         c0, Money(100));
+		book.RecordEvent(TimerGameEconomy::Date(2), StockEventType::Split,       c0, Money(50));
+		book.RecordEvent(TimerGameEconomy::Date(3), StockEventType::TakeoverBid, c0, Money(50));
+
+		REQUIRE(book.events.size() == 3);
+		CHECK(book.events[0].type == StockEventType::IPO);
+		CHECK(book.events[1].type == StockEventType::Split);
+		CHECK(book.events[2].type == StockEventType::TakeoverBid);
+	}
+
+	SECTION("trims to MAX_STOCK_EVENTS, keeping most recent") {
+		for (uint16_t i = 0; i < MAX_STOCK_EVENTS + 10; i++) {
+			book.RecordEvent(TimerGameEconomy::Date(i), StockEventType::IPO, c0, Money(i));
+		}
+		CHECK(book.events.size() == MAX_STOCK_EVENTS);
+		/* Oldest surviving entry should have date 10 (entries 0..9 were evicted). */
+		CHECK(book.events.front().date == TimerGameEconomy::Date(10));
+		/* Most recent should be the last one added. */
+		CHECK(book.events.back().date  == TimerGameEconomy::Date(MAX_STOCK_EVENTS + 9));
+	}
+
+	SECTION("exactly MAX_STOCK_EVENTS entries does not trim") {
+		for (uint16_t i = 0; i < MAX_STOCK_EVENTS; i++) {
+			book.RecordEvent(TimerGameEconomy::Date(i), StockEventType::Delisted, c0, Money(0));
+		}
+		CHECK(book.events.size() == MAX_STOCK_EVENTS);
+		CHECK(book.events.front().date == TimerGameEconomy::Date(0));
+	}
+
+	SECTION("all StockEventType values can be recorded") {
+		book.RecordEvent(TimerGameEconomy::Date(1), StockEventType::IPO,              c0, Money(100));
+		book.RecordEvent(TimerGameEconomy::Date(2), StockEventType::Split,            c0, Money(50));
+		book.RecordEvent(TimerGameEconomy::Date(3), StockEventType::TakeoverBid,      c0, Money(50));
+		book.RecordEvent(TimerGameEconomy::Date(4), StockEventType::TakeoverComplete, c0, Money(50));
+		book.RecordEvent(TimerGameEconomy::Date(5), StockEventType::Delisted,         c0, Money(0));
+
+		REQUIRE(book.events.size() == 5);
+		CHECK(book.events[0].type == StockEventType::IPO);
+		CHECK(book.events[1].type == StockEventType::Split);
+		CHECK(book.events[2].type == StockEventType::TakeoverBid);
+		CHECK(book.events[3].type == StockEventType::TakeoverComplete);
+		CHECK(book.events[4].type == StockEventType::Delisted);
+	}
+
+	SECTION("event with zero price is recorded correctly") {
+		book.RecordEvent(TimerGameEconomy::Date(10), StockEventType::Delisted, c0, Money(0));
+		REQUIRE(book.events.size() == 1);
+		CHECK(book.events[0].price == 0);
 	}
 }

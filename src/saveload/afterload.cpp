@@ -3440,7 +3440,7 @@ bool AfterLoadGame()
 			order.target = c->index;
 			order.units = c->stock_info.available_units;
 			order.units_filled = 0;
-			order.ask_price = std::max<Money>(c->stock_info.share_price, 1);
+			order.price = std::max<Money>(c->stock_info.share_price, 1);
 			order.creation_date = TimerGameEconomy::date;
 			_stock_order_book.orders.push_back(order);
 

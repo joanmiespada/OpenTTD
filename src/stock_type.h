@@ -42,11 +42,37 @@ static constexpr uint8_t STOCK_MAX_PRICE_CHANGE_PERCENT = 50;
 /** Minimum share price (in currency units) required before a stock split is allowed. */
 static constexpr Money STOCK_SPLIT_MIN_PRICE = 10000;
 
+/** Minimum number of units that must remain issued (float) when external holders exist. */
+static constexpr uint16_t STOCK_MIN_FLOAT_UNITS = 100;
+
+/** Number of economy days the issuing company is locked out from selling stock after an IPO. */
+static constexpr uint16_t STOCK_IPO_LOCKUP_DAYS = 30;
+
 using StockOrderID = uint32_t;
 static constexpr StockOrderID INVALID_STOCK_ORDER_ID = UINT32_MAX;
 
 /** Maximum number of transaction history entries to keep. */
 static constexpr uint16_t MAX_STOCK_TRANSACTIONS = 64;
+
+/** Maximum number of stock events to keep. */
+static constexpr uint16_t MAX_STOCK_EVENTS = 128;
+
+/** Types of stock market events. */
+enum class StockEventType : uint8_t {
+	IPO              = 0, ///< Company listed on the market.
+	Split            = 1, ///< Stock split occurred.
+	TakeoverBid      = 2, ///< Takeover bid initiated.
+	TakeoverComplete = 3, ///< Takeover completed.
+	Delisted         = 4, ///< Company delisted from the market.
+};
+
+/** A historical stock market event. */
+struct StockEvent {
+	TimerGameEconomy::Date date{};                       ///< When the event occurred.
+	StockEventType type = StockEventType::IPO;           ///< Type of event.
+	CompanyID company = CompanyID::Invalid();             ///< Company involved.
+	Money price = 0;                                     ///< Relevant price at time of event.
+};
 
 /** Represents a completed stock trade for the transaction log. */
 struct StockTransaction {
@@ -78,7 +104,7 @@ struct StockOrder {
 	CompanyID target;       ///< Company whose stock is being sold.
 	uint16_t units = 0;    ///< Total units offered for sale.
 	uint16_t units_filled = 0; ///< Units already purchased by buyers.
-	Money ask_price = 0;   ///< Price per unit (ask for sell orders, max bid for buy orders).
+	Money price = 0;       ///< Price per unit (ask price for sell orders, max bid price for buy orders).
 	TimerGameEconomy::Date creation_date{}; ///< Date the order was placed.
 	StockOrderSide side = StockOrderSide::Sell; ///< Whether this is a buy or sell order.
 	bool is_market_maker = false; ///< Whether this order was placed by the automated market maker.
@@ -101,6 +127,7 @@ struct StockOrderBook {
 	StockOrderID next_order_id = 0; ///< Next order ID to assign.
 	std::vector<StockOrder> orders{}; ///< All active sell orders.
 	std::vector<StockTransaction> transactions{}; ///< Rolling transaction history log.
+	std::vector<StockEvent> events{}; ///< Rolling event history log.
 
 	StockOrder *FindOrder(StockOrderID id);
 	const StockOrder *FindOrder(StockOrderID id) const;
@@ -112,6 +139,9 @@ struct StockOrderBook {
 
 	/** Record a completed trade in the transaction history. */
 	void RecordTransaction(TimerGameEconomy::Date date, CompanyID buyer, CompanyID target, uint16_t units, Money price);
+
+	/** Record a major stock market event in the event log. */
+	void RecordEvent(TimerGameEconomy::Date date, StockEventType type, CompanyID company, Money price);
 };
 
 extern StockOrderBook _stock_order_book;
@@ -128,6 +158,7 @@ struct CompanyStockInfo {
 	CompanyID takeover_bidder = CompanyID::Invalid(); ///< Company attempting hostile takeover.
 	TimerGameEconomy::Date takeover_defense_start{};  ///< Date defense period began.
 	bool takeover_defense_active = false;              ///< Whether a defense period is active.
+	TimerGameEconomy::Date ipo_date{};                 ///< Date the company first listed its stock.
 	std::vector<StockHolding> holders{};    ///< Who holds shares in this company.
 
 	/**

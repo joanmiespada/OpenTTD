@@ -137,7 +137,7 @@ void StockOrderBook::ExpireOldOrders()
 			if (remaining > 0) {
 				Company *buyer = Company::GetIfValid(order.placer);
 				if (buyer != nullptr) {
-					Money refund = order.ask_price * remaining;
+					Money refund = order.price * remaining;
 					buyer->money += refund;
 					buyer->yearly_expenses[0][EXPENSES_STOCK_PURCHASE] += refund;
 				}
@@ -162,7 +162,7 @@ void StockOrderBook::ExpireOldOrders()
 					if (holding != nullptr) {
 						holding->units += remaining;
 					} else {
-						target_company->stock_info.holders.push_back({order.placer, remaining, order.ask_price});
+						target_company->stock_info.holders.push_back({order.placer, remaining, order.price});
 					}
 				}
 			}
@@ -212,6 +212,30 @@ void StockOrderBook::RecordTransaction(TimerGameEconomy::Date date, CompanyID bu
 }
 
 /**
+ * Record a major stock market event in the event log.
+ * Keeps a rolling log of the last MAX_STOCK_EVENTS events.
+ * @param date Date of the event.
+ * @param type Type of event.
+ * @param company Company involved in the event.
+ * @param price Relevant price at the time of the event (0 if not applicable).
+ */
+void StockOrderBook::RecordEvent(TimerGameEconomy::Date date, StockEventType type, CompanyID company, Money price)
+{
+	StockEvent ev;
+	ev.date = date;
+	ev.type = type;
+	ev.company = company;
+	ev.price = price;
+	this->events.push_back(ev);
+
+	/* Trim to max size, keeping most recent entries. */
+	if (this->events.size() > MAX_STOCK_EVENTS) {
+		this->events.erase(this->events.begin(),
+			this->events.begin() + (this->events.size() - MAX_STOCK_EVENTS));
+	}
+}
+
+/**
  * Match buy and sell orders for a given target company.
  * Executes trades when a buy order's bid price >= a sell order's ask price.
  *
@@ -248,11 +272,11 @@ void StockOrderBook::MatchOrders(CompanyID target)
 
 	/* Sort buys descending by bid price (highest bid first). */
 	std::sort(buys.begin(), buys.end(), [](const StockOrder *a, const StockOrder *b) {
-		return a->ask_price > b->ask_price;
+		return a->price > b->price;
 	});
 	/* Sort sells ascending by ask price (lowest ask first). */
 	std::sort(sells.begin(), sells.end(), [](const StockOrder *a, const StockOrder *b) {
-		return a->ask_price < b->ask_price;
+		return a->price < b->price;
 	});
 
 	/* Two-pointer sweep: advance bi when the buy is consumed, si when the sell is consumed.
@@ -270,14 +294,14 @@ void StockOrderBook::MatchOrders(CompanyID target)
 		if (best_sell->IsFilled()) { si++; continue; }
 
 		/* Sorted invariant: once the best bid < best ask, no further match is possible. */
-		if (best_buy->ask_price < best_sell->ask_price) break;
+		if (best_buy->price < best_sell->price) break;
 
 		/* Self-trade prevention: skip this sell and try the next one at the same or
 		 * higher ask.  The buy order remains at bi so it can match a different counterparty. */
 		if (best_buy->placer == best_sell->placer) { si++; continue; }
 
 		/* Execute the trade at the sell (ask) price. */
-		Money trade_price = best_sell->ask_price;
+		Money trade_price = best_sell->price;
 		uint16_t trade_units = std::min(best_buy->GetRemainingUnits(), best_sell->GetRemainingUnits());
 
 		/* Transfer shares to buyer.
@@ -309,7 +333,7 @@ void StockOrderBook::MatchOrders(CompanyID target)
 		/* Refund overpayment (bid - ask) to buyer.
 		 * Market maker buy orders have no real buyer to refund. */
 		if (!best_buy->is_market_maker) {
-			Money refund = (best_buy->ask_price - trade_price) * trade_units;
+			Money refund = (best_buy->price - trade_price) * trade_units;
 			Company *buyer_co = Company::GetIfValid(best_buy->placer);
 			if (buyer_co != nullptr && refund > 0) {
 				buyer_co->money += refund;
@@ -545,7 +569,12 @@ CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue, M
 	}
 
 	if (flags.Test(DoCommandFlag::Execute)) {
+		/* Record the IPO date on first listing for the lock-up period check. */
+		bool first_listing = !c->stock_info.listed;
 		c->stock_info.listed = true;
+		if (first_listing) {
+			c->stock_info.ipo_date = TimerGameEconomy::date;
+		}
 		c->stock_info.total_issued += units_to_issue;
 		c->stock_info.share_price = price_per_unit;
 
@@ -556,13 +585,15 @@ CommandCost CmdListCompanyStock(DoCommandFlags flags, uint16_t units_to_issue, M
 		order.target = _current_company;
 		order.units = units_to_issue;
 		order.units_filled = 0;
-		order.ask_price = price_per_unit;
+		order.price = price_per_unit;
 		order.creation_date = TimerGameEconomy::date;
 		_stock_order_book.orders.push_back(order);
 
 		/* Announce IPO in the news. */
 		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_IPO, _current_company, units_to_issue, price_per_unit),
 			NewsType::Economy, NewsStyle::Normal, {});
+
+		_stock_order_book.RecordEvent(TimerGameEconomy::date, StockEventType::IPO, _current_company, price_per_unit);
 
 		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
@@ -588,7 +619,15 @@ CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t u
 	if (!target_company->stock_info.listed) return CommandCost(STR_ERROR_STOCK_NOT_LISTED);
 	if (units == 0) return CMD_ERROR;
 	if (ask_price <= 0) return CMD_ERROR;
-	if (_current_company == target) return CommandCost(STR_ERROR_STOCK_CANNOT_PLACE_ORDER);
+
+	/* Check IPO lock-up: the issuing company may not place sell orders for its own
+	 * stock during the lock-up period following the IPO. Third parties are unaffected. */
+	if (_current_company == target) {
+		auto days_since_ipo = TimerGameEconomy::date - target_company->stock_info.ipo_date;
+		if (days_since_ipo < STOCK_IPO_LOCKUP_DAYS) {
+			return CommandCost(STR_ERROR_STOCK_IPO_LOCKUP);
+		}
+	}
 
 	/* Check placer holds enough units */
 	StockHolding *holding = target_company->stock_info.FindHolder(_current_company);
@@ -618,7 +657,7 @@ CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t u
 		order.target = target;
 		order.units = units;
 		order.units_filled = 0;
-		order.ask_price = ask_price;
+		order.price = ask_price;
 		order.creation_date = TimerGameEconomy::date;
 		_stock_order_book.orders.push_back(order);
 
@@ -632,7 +671,9 @@ CommandCost CmdPlaceSellOrder(DoCommandFlags flags, CompanyID target, uint16_t u
 }
 
 /**
- * Cancel an existing sell order.
+ * Cancel an existing stock order (buy or sell).
+ * For sell orders, the escrowed shares are returned to the placer's holding.
+ * For buy orders, the escrowed bid money is refunded to the placer.
  * @param flags DoCommandFlags.
  * @param order_id The ID of the order to cancel.
  * @return The cost of this operation or an error.
@@ -652,7 +693,7 @@ CommandCost CmdCancelSellOrder(DoCommandFlags flags, StockOrderID order_id)
 		if (order->IsBuyOrder()) {
 			/* Buy order cancel: refund escrowed money to the buyer. */
 			if (remaining > 0) {
-				Money refund = order->ask_price * remaining;
+				Money refund = order->price * remaining;
 				Company *buyer_company = Company::GetIfValid(order->placer);
 				if (buyer_company != nullptr) {
 					buyer_company->money += refund;
@@ -676,7 +717,7 @@ CommandCost CmdCancelSellOrder(DoCommandFlags flags, StockOrderID order_id)
 					if (holding != nullptr) {
 						holding->units += remaining;
 					} else {
-						target_company->stock_info.holders.push_back({order->placer, remaining, order->ask_price});
+						target_company->stock_info.holders.push_back({order->placer, remaining, order->price});
 					}
 				}
 			}
@@ -720,7 +761,7 @@ CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16
 	uint16_t remaining = order->GetRemainingUnits();
 	if (units > remaining) return CommandCost(STR_ERROR_STOCK_NOT_ENOUGH_AVAILABLE);
 
-	Money total_cost = order->ask_price * units;
+	Money total_cost = order->price * units;
 	CommandCost ret(EXPENSES_STOCK_PURCHASE, total_cost);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
@@ -738,15 +779,15 @@ CommandCost CmdFillSellOrder(DoCommandFlags flags, StockOrderID order_id, uint16
 			buyer_holding->units += units;
 			buyer_holding->purchase_price = (old_total + total_cost) / buyer_holding->units;
 		} else {
-			target_company->stock_info.holders.push_back({_current_company, units, order->ask_price});
+			target_company->stock_info.holders.push_back({_current_company, units, order->price});
 		}
 
 		/* Update order fill status. */
 		order->units_filled += units;
-		_stock_order_book.RecordTransaction(TimerGameEconomy::date, _current_company, order->target, units, order->ask_price);
+		_stock_order_book.RecordTransaction(TimerGameEconomy::date, _current_company, order->target, units, order->price);
 
 		/* Price discovery: update share price to last trade price. */
-		target_company->stock_info.share_price = order->ask_price;
+		target_company->stock_info.share_price = order->price;
 
 		/* Remove fully filled orders. */
 		if (order->IsFilled()) {
@@ -787,7 +828,7 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 	uint16_t order_book_units = 0;
 	for (const auto &order : _stock_order_book.orders) {
 		if (order.target != _current_company) continue;
-		if (max_price > 0 && order.ask_price > max_price) continue;
+		if (max_price > 0 && order.price > max_price) continue;
 		order_book_units += order.GetRemainingUnits();
 	}
 
@@ -797,6 +838,17 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 	/* Prevent complete delisting while a takeover defense is active. */
 	if (c->stock_info.takeover_defense_active && units >= c->stock_info.total_issued) {
 		return CommandCost(STR_ERROR_STOCK_CANNOT_DELIST_DURING_TAKEOVER);
+	}
+
+	/* Enforce minimum public float: if external holders exist, at least STOCK_MIN_FLOAT_UNITS
+	 * must remain outstanding after the buyback.  A company with no external holders can still
+	 * buy back all of its stock (full delist). */
+	uint16_t external_units = c->stock_info.GetHeldUnits();
+	if (external_units > 0) {
+		uint16_t units_after = (units < c->stock_info.total_issued) ? c->stock_info.total_issued - units : 0;
+		if (units_after < STOCK_MIN_FLOAT_UNITS) {
+			return CommandCost(STR_ERROR_STOCK_MIN_FLOAT);
+		}
 	}
 
 	if (units > total_available) {
@@ -811,8 +863,8 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 	std::vector<std::pair<StockOrderID, Money>> eligible_orders;
 	for (const auto &order : _stock_order_book.orders) {
 		if (order.target != _current_company) continue;
-		if (max_price > 0 && order.ask_price > max_price) continue;
-		eligible_orders.push_back({order.order_id, order.ask_price});
+		if (max_price > 0 && order.price > max_price) continue;
+		eligible_orders.push_back({order.order_id, order.price});
 	}
 	std::sort(eligible_orders.begin(), eligible_orders.end(),
 		[](const auto &a, const auto &b) { return a.second < b.second; });
@@ -897,6 +949,7 @@ CommandCost CmdBuybackStock(DoCommandFlags flags, uint16_t units, Money max_pric
 		/* If no stock remains, delist. */
 		if (c->stock_info.total_issued == 0) {
 			c->stock_info.listed = false;
+			_stock_order_book.RecordEvent(TimerGameEconomy::date, StockEventType::Delisted, _current_company, c->stock_info.share_price);
 		}
 
 		/* Announce buyback in the news. */
@@ -957,7 +1010,7 @@ CommandCost CmdPlaceBuyOrder(DoCommandFlags flags, CompanyID target, uint16_t un
 		order.target = target;
 		order.units = units;
 		order.units_filled = 0;
-		order.ask_price = bid_price; /* For buy orders, this is the max bid price. */
+		order.price = bid_price; /* For buy orders, this is the max bid price. */
 		order.creation_date = TimerGameEconomy::date;
 		order.side = StockOrderSide::Buy;
 		_stock_order_book.orders.push_back(order);
@@ -1013,6 +1066,8 @@ CommandCost CmdInitiateTakeover(DoCommandFlags flags, CompanyID target)
 		/* Announce takeover attempt. */
 		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_TAKEOVER_DEFENSE, target, _current_company),
 			NewsType::Economy, NewsStyle::Normal, {});
+
+		_stock_order_book.RecordEvent(TimerGameEconomy::date, StockEventType::TakeoverBid, target, target_company->stock_info.share_price);
 
 		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
@@ -1091,6 +1146,8 @@ CommandCost CmdExecuteTakeover(DoCommandFlags flags, CompanyID target)
 		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_TAKEOVER, target, _current_company),
 			NewsType::Economy, NewsStyle::Normal, {});
 
+		_stock_order_book.RecordEvent(TimerGameEconomy::date, StockEventType::TakeoverComplete, target, share_price);
+
 		/* Delete target company. */
 		Command<Commands::CompanyControl>::Post(CompanyCtrlAction::Delete, target, CompanyRemoveReason::Manual, INVALID_CLIENT_ID);
 
@@ -1141,11 +1198,13 @@ CommandCost CmdStockSplit(DoCommandFlags flags, bool)
 			if (order.target != _current_company) continue;
 			order.units *= 2;
 			order.units_filled *= 2;
-			order.ask_price /= 2;
+			order.price /= 2;
 		}
 
 		AddNewsItem(GetEncodedString(STR_NEWS_STOCK_SPLIT, _current_company),
 			NewsType::Economy, NewsStyle::Normal, {});
+
+		_stock_order_book.RecordEvent(TimerGameEconomy::date, StockEventType::Split, _current_company, c->stock_info.share_price);
 
 		InvalidateWindowClassesData(WC_STOCK_MARKET);
 	}
@@ -1224,7 +1283,7 @@ static void RunMarketMaker()
 			order.target        = target;
 			order.units         = order_units;
 			order.units_filled  = 0;
-			order.ask_price     = bid_price;
+			order.price     = bid_price;
 			order.creation_date = now;
 			order.side          = StockOrderSide::Buy;
 			order.is_market_maker = true;
@@ -1242,7 +1301,7 @@ static void RunMarketMaker()
 			order.target        = target;
 			order.units         = order_units;
 			order.units_filled  = 0;
-			order.ask_price     = ask_price;
+			order.price     = ask_price;
 			order.creation_date = now;
 			order.side          = StockOrderSide::Sell;
 			order.is_market_maker = true;
@@ -1295,7 +1354,7 @@ static void AutoIPOForAICompanies()
 		order.target = c->index;
 		order.units = AI_AUTO_IPO_UNITS;
 		order.units_filled = 0;
-		order.ask_price = formula_price;
+		order.price = formula_price;
 		order.creation_date = TimerGameEconomy::date;
 		_stock_order_book.orders.push_back(order);
 

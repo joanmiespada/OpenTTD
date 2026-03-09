@@ -691,6 +691,9 @@ STR_STOCK_INFO_LAST_DIVIDEND                                    :{BLACK}Last Div
 STR_STOCK_INFO_TOTAL_DIVIDENDS                                  :{BLACK}Total Dividends Paid: {CURRENCY_LONG}
 STR_STOCK_INFO_MARKET_CAP                                       :{BLACK}Market Cap: {CURRENCY_LONG}
 STR_STOCK_INFO_PE_RATIO                                         :{BLACK}P/E Ratio: {NUM}
+STR_STOCK_INFO_CASH                                             :{BLACK}Cash: {CURRENCY_LONG}
+STR_STOCK_INFO_LAST_PROFIT                                      :{BLACK}Last Quarter: {CURRENCY_LONG}
+STR_STOCK_DIVIDEND_SCHEDULE                                     :{BLACK}Dividends: Paid annually
 STR_STOCK_ISSUE_SHARES                                          :{BLACK}Issue Shares
 STR_STOCK_ISSUE_SHARES_TOOLTIP                                  :{BLACK}Issue new shares on the market. Ctrl+Click to issue maximum
 STR_STOCK_ISSUE_SHARES_QUERY                                    :Enter the number of share units to issue
@@ -736,6 +739,12 @@ STR_STOCK_SORT_PRICE                                            :{BLACK}Sort: Pr
 STR_STOCK_SORT_NAME                                             :{BLACK}Sort: Name
 STR_STOCK_SORT_YIELD                                            :{BLACK}Sort: Yield
 STR_STOCK_SORT_MARKET_CAP                                       :{BLACK}Sort: Market Cap
+STR_STOCK_MARKET_STATS                                          :{BLACK}Listed: {NUM}  Total Market Cap: {CURRENCY_LONG}  Avg Price: {CURRENCY_LONG}
+STR_STOCK_FILTER_ALL                                            :{BLACK}All
+STR_STOCK_FILTER_HOLDINGS                                       :{BLACK}My Holdings
+STR_STOCK_FILTER_TOGGLE_TOOLTIP                                 :{BLACK}Toggle between showing all companies or only companies you hold shares in
+STR_STOCK_MARKET_BUY_QUERY_COST                                 :Enter the number of share units to buy (est. cost: {CURRENCY_LONG} each)
+STR_STOCK_MARKET_SELL_QUERY_VALUE                               :Enter the number of share units to sell (est. value: {CURRENCY_LONG} each)
 
 # Order book section
 STR_STOCK_ORDER_BOOK_CAPTION                                    :{BLACK}Order Book
@@ -784,11 +793,15 @@ STR_NEWS_STOCK_SPLIT                                            :{BLACK}{COMPANY
 STR_ERROR_STOCK_SPLIT_PRICE_TOO_LOW                             :{WHITE}Share price too low for stock split
 STR_ERROR_STOCK_SPLIT_TOO_MANY_UNITS                            :{WHITE}Stock split would exceed maximum units
 STR_ERROR_STOCK_CANNOT_DELIST_DURING_TAKEOVER                   :{WHITE}Cannot delist company during active takeover defense
+STR_ERROR_STOCK_IPO_LOCKUP                                      :{WHITE}Cannot sell stock during the 30-day IPO lock-up period
+STR_ERROR_STOCK_MIN_FLOAT                                       :{WHITE}Buyback would reduce public float below the minimum required
 
 STR_STOCK_PLACE_BUY_ORDER                                       :{BLACK}Place Buy Order
 STR_STOCK_PLACE_BUY_ORDER_TOOLTIP                               :{BLACK}Place a standing buy order at a limit price (Ctrl+Click to buy at market price)
 STR_STOCK_BUY_ORDER_UNITS_QUERY                                 :{WHITE}Number of units to bid for:
 STR_STOCK_BUY_ORDER_PRICE_QUERY                                 :{WHITE}Maximum price per unit:
+STR_STOCK_CANCEL_ORDER                                          :{BLACK}Cancel Order
+STR_STOCK_CANCEL_ORDER_TOOLTIP                                  :{BLACK}Cancel the selected order in the order book and return escrowed assets
 STR_STOCK_INITIATE_TAKEOVER                                     :{BLACK}Initiate Takeover
 STR_STOCK_INITIATE_TAKEOVER_TOOLTIP                             :{BLACK}Begin hostile takeover (requires >50% ownership)
 STR_STOCK_EXECUTE_TAKEOVER                                      :{BLACK}Complete Takeover
