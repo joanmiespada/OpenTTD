@@ -176,15 +176,53 @@ struct STEVChunkHandler : ChunkHandler {
 	}
 };
 
+static const SaveLoad _stock_alert_desc[] = {
+	SLE_VAR(StockPriceAlert, owner,        SLE_UINT8),
+	SLE_VAR(StockPriceAlert, target,       SLE_UINT8),
+	SLE_VAR(StockPriceAlert, target_price, SLE_INT64),
+	SLE_VAR(StockPriceAlert, alert_above,  SLE_BOOL),
+	SLE_VAR(StockPriceAlert, triggered,    SLE_BOOL),
+};
+
+struct STALChunkHandler : ChunkHandler {
+	STALChunkHandler() : ChunkHandler('STAL', CH_TABLE) {}
+
+	void Save() const override
+	{
+		SlTableHeader(_stock_alert_desc);
+
+		for (size_t i = 0; i < _stock_order_book.alerts.size(); i++) {
+			SlSetArrayIndex(static_cast<int>(i));
+			SlObject(&_stock_order_book.alerts[i], _stock_alert_desc);
+		}
+	}
+
+	void Load() const override
+	{
+		const std::vector<SaveLoad> slt = SlTableHeader(_stock_alert_desc);
+
+		_stock_order_book.alerts.clear();
+
+		int index;
+		while ((index = SlIterateArray()) != -1) {
+			StockPriceAlert alert;
+			SlObject(&alert, slt);
+			_stock_order_book.alerts.push_back(alert);
+		}
+	}
+};
+
 static const STOKChunkHandler STOK;
 static const STKHChunkHandler STKH;
 static const STXNChunkHandler STXN;
 static const STEVChunkHandler STEV;
+static const STALChunkHandler STAL;
 static const ChunkHandlerRef stock_chunk_handlers[] = {
 	STKH,
 	STOK,
 	STXN,
 	STEV,
+	STAL,
 };
 
 extern const ChunkHandlerTable _stock_chunk_handlers(stock_chunk_handlers);

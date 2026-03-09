@@ -45,9 +45,11 @@ enum StockMarketWidgets : WidgetID {
 
 	WID_STM_CANCEL_ORDER_BUTTON,  ///< Button to cancel a selected order in the order book.
 
-	WID_STM_BUY_BUTTON,          ///< Buy shares button.
+	WID_STM_BUY_BUTTON,           ///< Buy shares button.
 	WID_STM_SELL_BUTTON,          ///< Sell shares button.
 	WID_STM_PRICE_GRAPH_BUTTON,   ///< Button to show stock price history graph.
+	WID_STM_SET_ALERT_BUTTON,     ///< Button to set a price alert on the selected company.
+	WID_STM_CLEAR_ALERT_BUTTON,   ///< Button to clear the price alert on the selected company.
 };
 
 #endif /* WIDGETS_STOCK_WIDGET_H */

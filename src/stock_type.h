@@ -51,6 +51,9 @@ static constexpr uint16_t STOCK_IPO_LOCKUP_DAYS = 30;
 using StockOrderID = uint32_t;
 static constexpr StockOrderID INVALID_STOCK_ORDER_ID = UINT32_MAX;
 
+/** Maximum number of price alerts per company. */
+static constexpr uint16_t MAX_PRICE_ALERTS = 16;
+
 /** Maximum number of transaction history entries to keep. */
 static constexpr uint16_t MAX_STOCK_TRANSACTIONS = 64;
 
@@ -82,6 +85,15 @@ struct StockTransaction {
 	uint16_t units = 0;            ///< Number of units traded.
 	Money price_per_unit = 0;      ///< Trade price per unit.
 	Money total_value = 0;         ///< Total transaction value.
+};
+
+/** A price alert set by a company to watch another company's stock. */
+struct StockPriceAlert {
+	CompanyID owner;               ///< Company that set the alert.
+	CompanyID target;              ///< Company whose price is being watched.
+	Money target_price = 0;        ///< Price threshold.
+	bool alert_above = true;       ///< If true, alert when price >= target; if false, alert when price <= target.
+	bool triggered = false;        ///< Whether this alert has already fired.
 };
 
 /** Represents a stock holding by one company in another. */
@@ -128,6 +140,7 @@ struct StockOrderBook {
 	std::vector<StockOrder> orders{}; ///< All active sell orders.
 	std::vector<StockTransaction> transactions{}; ///< Rolling transaction history log.
 	std::vector<StockEvent> events{}; ///< Rolling event history log.
+	std::vector<StockPriceAlert> alerts{}; ///< Active price alerts.
 
 	StockOrder *FindOrder(StockOrderID id);
 	const StockOrder *FindOrder(StockOrderID id) const;
@@ -155,6 +168,7 @@ struct CompanyStockInfo {
 	Money prev_quarter_price = 0;           ///< Share price at the end of the previous quarter (for change indicators).
 	Money last_dividend_per_unit = 0;       ///< Last dividend paid per unit.
 	Money total_dividends_paid = 0;         ///< Lifetime dividends paid by this company.
+	TimerGameEconomy::Date last_dividend_date{};  ///< Economy date on which dividends were last paid.
 	CompanyID takeover_bidder = CompanyID::Invalid(); ///< Company attempting hostile takeover.
 	TimerGameEconomy::Date takeover_defense_start{};  ///< Date defense period began.
 	bool takeover_defense_active = false;              ///< Whether a defense period is active.

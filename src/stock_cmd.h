@@ -23,16 +23,20 @@ CommandCost CmdPlaceBuyOrder(DoCommandFlags flags, CompanyID target, uint16_t un
 CommandCost CmdInitiateTakeover(DoCommandFlags flags, CompanyID target);
 CommandCost CmdExecuteTakeover(DoCommandFlags flags, CompanyID target);
 CommandCost CmdStockSplit(DoCommandFlags flags, bool execute_split);
+CommandCost CmdSetPriceAlert(DoCommandFlags flags, CompanyID target, Money target_price, bool alert_above);
+CommandCost CmdClearPriceAlert(DoCommandFlags flags, CompanyID target);
 
-DEF_CMD_TRAIT(Commands::ListCompanyStock, CmdListCompanyStock, {}, CommandType::MoneyManagement)
-DEF_CMD_TRAIT(Commands::PlaceSellOrder,   CmdPlaceSellOrder,   {}, CommandType::MoneyManagement)
-DEF_CMD_TRAIT(Commands::CancelSellOrder,  CmdCancelSellOrder,  {}, CommandType::MoneyManagement)
-DEF_CMD_TRAIT(Commands::FillSellOrder,    CmdFillSellOrder,    {}, CommandType::MoneyManagement)
-DEF_CMD_TRAIT(Commands::BuybackStock,     CmdBuybackStock,     {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::ListCompanyStock,  CmdListCompanyStock,  {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::PlaceSellOrder,    CmdPlaceSellOrder,    {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::CancelSellOrder,   CmdCancelSellOrder,   {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::FillSellOrder,     CmdFillSellOrder,     {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::BuybackStock,      CmdBuybackStock,      {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::PlaceBuyOrder,     CmdPlaceBuyOrder,     {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::InitiateTakeover,  CmdInitiateTakeover,  {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::ExecuteTakeover,   CmdExecuteTakeover,   {}, CommandType::MoneyManagement)
 DEF_CMD_TRAIT(Commands::StockSplit,        CmdStockSplit,        {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::SetPriceAlert,     CmdSetPriceAlert,     {}, CommandType::MoneyManagement)
+DEF_CMD_TRAIT(Commands::ClearPriceAlert,   CmdClearPriceAlert,   {}, CommandType::MoneyManagement)
 
 Money CalculateStockBaseValue(const struct Company *c);
 void UpdateStockPrices();

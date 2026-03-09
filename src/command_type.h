@@ -389,6 +389,8 @@ enum class Commands : uint8_t {
 	InitiateTakeover, ///< declare intent to take over a company
 	ExecuteTakeover, ///< complete the takeover after defense period
 	StockSplit, ///< perform a 2:1 stock split
+	SetPriceAlert, ///< set a price alert on another company's stock
+	ClearPriceAlert, ///< clear a price alert on another company's stock
 
 	End, ///< @important Must ALWAYS be on the end of this list!! (period)
 };

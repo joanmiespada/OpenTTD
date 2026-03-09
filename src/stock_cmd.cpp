@@ -104,6 +104,11 @@ void StockOrderBook::RemoveOrdersForCompany(CompanyID company)
 		std::remove_if(this->transactions.begin(), this->transactions.end(),
 			[company](const StockTransaction &t) { return t.buyer == company || t.target == company; }),
 		this->transactions.end());
+
+	/* Remove price alerts involving the removed company (as owner or as target). */
+	std::erase_if(this->alerts, [company](const StockPriceAlert &a) {
+		return a.owner == company || a.target == company;
+	});
 }
 
 /**
@@ -233,6 +238,140 @@ void StockOrderBook::RecordEvent(TimerGameEconomy::Date date, StockEventType typ
 		this->events.erase(this->events.begin(),
 			this->events.begin() + (this->events.size() - MAX_STOCK_EVENTS));
 	}
+}
+
+/**
+ * Check all active price alerts and fire any whose conditions are now met.
+ *
+ * Iterates every alert in the order book.  If the target company's current share
+ * price satisfies the alert condition the alert is marked triggered and a news
+ * item is issued that is only relevant to the company that set the alert.
+ * Triggered alerts are removed after the loop.
+ */
+static void CheckPriceAlerts()
+{
+	if (!_settings_game.economy.stock_market) return;
+
+	for (auto &alert : _stock_order_book.alerts) {
+		if (alert.triggered) continue;
+		const Company *target = Company::GetIfValid(alert.target);
+		if (target == nullptr || !target->stock_info.listed) continue;
+
+		bool condition_met = alert.alert_above
+			? (target->stock_info.share_price >= alert.target_price)
+			: (target->stock_info.share_price <= alert.target_price);
+
+		if (!condition_met) continue;
+
+		alert.triggered = true;
+
+		/* Only notify the company that set the alert.  In multiplayer the news
+		 * item is broadcast to all clients, but the recipient filter means only
+		 * the owning client will display it. */
+		if (alert.owner == _local_company) {
+			StringID str = alert.alert_above
+				? STR_NEWS_STOCK_PRICE_ALERT_ABOVE
+				: STR_NEWS_STOCK_PRICE_ALERT_BELOW;
+			AddNewsItem(GetEncodedString(str, alert.target, target->stock_info.share_price, alert.target_price),
+				NewsType::Economy, NewsStyle::Normal, {});
+		}
+	}
+
+	std::erase_if(_stock_order_book.alerts, [](const StockPriceAlert &a) { return a.triggered; });
+}
+
+/**
+ * Set a price alert on another company's stock.
+ *
+ * The alert fires (once) the next time the target company's share price
+ * crosses the supplied threshold.
+ *
+ * @param flags        Command execution flags.
+ * @param target       Company whose stock to watch.
+ * @param target_price Price threshold (must be > 0).
+ * @param alert_above  true  => alert when price >= target_price.
+ *                     false => alert when price <= target_price.
+ * @return CommandCost indicating success or failure.
+ */
+CommandCost CmdSetPriceAlert(DoCommandFlags flags, CompanyID target, Money target_price, bool alert_above)
+{
+	if (!_settings_game.economy.stock_market) return CMD_ERROR;
+
+	const Company *target_company = Company::GetIfValid(target);
+	if (target_company == nullptr || !target_company->stock_info.listed) {
+		return CommandCost(STR_ERROR_STOCK_COMPANY_NOT_LISTED);
+	}
+
+	if (target == _current_company) {
+		return CommandCost(STR_ERROR_STOCK_CANNOT_SET_ALERT_OWN_COMPANY);
+	}
+
+	if (target_price <= 0) {
+		return CommandCost(STR_ERROR_STOCK_ALERT_PRICE_INVALID);
+	}
+
+	/* Count existing alerts from this owner, excluding any existing alert on the
+	 * same target (updating a threshold does not consume an extra alert slot). */
+	uint16_t count = 0;
+	for (const auto &a : _stock_order_book.alerts) {
+		if (a.owner == _current_company && a.target != target) count++;
+	}
+	if (count >= MAX_PRICE_ALERTS) {
+		return CommandCost(STR_ERROR_STOCK_TOO_MANY_ALERTS);
+	}
+
+	if (flags.Test(DoCommandFlag::Execute)) {
+		/* Remove any existing alert this owner has on the same target. */
+		CompanyID owner = _current_company;
+		std::erase_if(_stock_order_book.alerts, [owner, target](const StockPriceAlert &a) {
+			return a.owner == owner && a.target == target;
+		});
+
+		StockPriceAlert alert;
+		alert.owner = _current_company;
+		alert.target = target;
+		alert.target_price = target_price;
+		alert.alert_above = alert_above;
+		alert.triggered = false;
+		_stock_order_book.alerts.push_back(alert);
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
+	}
+
+	return CommandCost();
+}
+
+/**
+ * Clear an existing price alert this company has on a target's stock.
+ *
+ * @param flags  Command execution flags.
+ * @param target Company whose alert to remove.
+ * @return CommandCost indicating success or failure.
+ */
+CommandCost CmdClearPriceAlert(DoCommandFlags flags, CompanyID target)
+{
+	if (!_settings_game.economy.stock_market) return CMD_ERROR;
+
+	/* Check that an alert actually exists for this owner/target pair. */
+	bool found = false;
+	for (const auto &a : _stock_order_book.alerts) {
+		if (a.owner == _current_company && a.target == target) {
+			found = true;
+			break;
+		}
+	}
+	if (!found) return CMD_ERROR;
+
+	if (flags.Test(DoCommandFlag::Execute)) {
+		CompanyID owner = _current_company;
+		std::erase_if(_stock_order_book.alerts, [owner, target](const StockPriceAlert &a) {
+			return a.owner == owner && a.target == target;
+		});
+
+		InvalidateWindowClassesData(WC_STOCK_MARKET);
+	}
+
+	return CommandCost();
 }
 
 /**
@@ -484,6 +623,7 @@ void PayAnnualDividends()
 		}
 
 		c->stock_info.last_dividend_per_unit = dividend_per_unit;
+		c->stock_info.last_dividend_date = TimerGameEconomy::date;
 
 		/* Pay dividends to direct holders. */
 		for (auto &holder : c->stock_info.holders) {
@@ -1368,6 +1508,7 @@ static void AutoIPOForAICompanies()
 /** Timer for quarterly stock price updates. */
 static const IntervalTimer<TimerGameEconomy> _update_stock_prices({TimerGameEconomy::Trigger::Quarter, TimerGameEconomy::Priority::None}, [](auto) {
 	UpdateStockPrices();
+	CheckPriceAlerts();
 });
 
 /** Timer for quarterly market maker order refresh. */

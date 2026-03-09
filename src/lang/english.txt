@@ -693,7 +693,10 @@ STR_STOCK_INFO_MARKET_CAP                                       :{BLACK}Market C
 STR_STOCK_INFO_PE_RATIO                                         :{BLACK}P/E Ratio: {NUM}
 STR_STOCK_INFO_CASH                                             :{BLACK}Cash: {CURRENCY_LONG}
 STR_STOCK_INFO_LAST_PROFIT                                      :{BLACK}Last Quarter: {CURRENCY_LONG}
-STR_STOCK_DIVIDEND_SCHEDULE                                     :{BLACK}Dividends: Paid annually
+STR_STOCK_DIVIDEND_NEXT                                         :{BLACK}Next dividend: ~{DATE_LONG} (in {NUM} days)
+STR_STOCK_DIVIDEND_ESTIMATE                                     :{BLACK}Est. per unit: {CURRENCY_LONG}  Total payout: {CURRENCY_LONG}
+STR_STOCK_DIVIDEND_NO_HISTORY                                   :{BLACK}No dividends paid yet (paid annually)
+STR_STOCK_DIVIDEND_NOT_LISTED                                   :{BLACK}Company not listed on the market
 STR_STOCK_ISSUE_SHARES                                          :{BLACK}Issue Shares
 STR_STOCK_ISSUE_SHARES_TOOLTIP                                  :{BLACK}Issue new shares on the market. Ctrl+Click to issue maximum
 STR_STOCK_ISSUE_SHARES_QUERY                                    :Enter the number of share units to issue
@@ -808,6 +811,26 @@ STR_STOCK_EXECUTE_TAKEOVER                                      :{BLACK}Complete
 STR_STOCK_EXECUTE_TAKEOVER_TOOLTIP                              :{BLACK}Complete the takeover after the defense period
 STR_STOCK_TAKEOVER_STATUS                                       :{RED}Takeover by {COMPANY} - Defense: {NUM} days remaining
 STR_STOCK_MARKET_BIDS                                           :Bids: {NUM}
+
+# Stock trade confirmation dialogs
+STR_STOCK_CONFIRM_TITLE                                         :{WHITE}Confirm Stock Trade
+STR_STOCK_CONFIRM_BUY                                           :{WHITE}Buy {NUM} units of {COMPANY} stock for ~{CURRENCY_LONG}?
+STR_STOCK_CONFIRM_SELL                                          :{WHITE}Sell {NUM} units of {COMPANY} stock for ~{CURRENCY_LONG}?
+STR_STOCK_CONFIRM_ISSUE                                         :{WHITE}Issue {NUM} new share units?
+STR_STOCK_CONFIRM_BUYBACK                                       :{WHITE}Buy back {NUM} share units?
+
+# Stock price alerts
+STR_STOCK_SET_ALERT                                             :{BLACK}Set Price Alert
+STR_STOCK_SET_ALERT_TOOLTIP                                     :{BLACK}Set a notification when this stock reaches a target price. Ctrl+Click to set alert below current price
+STR_STOCK_ALERT_QUERY                                           :Enter target price for alert
+STR_STOCK_CLEAR_ALERT                                           :{BLACK}Clear Alert
+STR_STOCK_CLEAR_ALERT_TOOLTIP                                   :{BLACK}Remove the price alert for this stock
+STR_NEWS_STOCK_PRICE_ALERT_ABOVE                                :{BLACK}{COMPANY} stock has risen to {CURRENCY_LONG} (your alert target: {CURRENCY_LONG})
+STR_NEWS_STOCK_PRICE_ALERT_BELOW                                :{BLACK}{COMPANY} stock has fallen to {CURRENCY_LONG} (your alert target: {CURRENCY_LONG})
+STR_ERROR_STOCK_COMPANY_NOT_LISTED                              :{WHITE}That company is not listed on the stock market
+STR_ERROR_STOCK_CANNOT_SET_ALERT_OWN_COMPANY                    :{WHITE}Cannot set a price alert on your own company's stock
+STR_ERROR_STOCK_ALERT_PRICE_INVALID                             :{WHITE}Alert price must be greater than zero
+STR_ERROR_STOCK_TOO_MANY_ALERTS                                 :{WHITE}You have reached the maximum number of price alerts
 
 # Performance detail window
 STR_PERFORMANCE_DETAIL                                          :{WHITE}Detailed Performance Rating

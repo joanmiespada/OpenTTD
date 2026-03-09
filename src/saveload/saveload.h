@@ -421,6 +421,8 @@ enum SaveLoadVersion : uint16_t {
 	SLV_STOCK_MARKET_V4,                    ///< 369  Stock market previous quarter price for change indicators.
 	SLV_STOCK_MARKET_V5,                    ///< 370  Stock market IPO lock-up date for issuer sell restriction.
 	SLV_STOCK_MARKET_V6,                    ///< 371  Stock market event log per order book.
+	SLV_STOCK_MARKET_V7,                    ///< 372  Stock market price alerts per order book.
+	SLV_STOCK_MARKET_V8,                    ///< 373  Stock market dividend payment date tracking.
 
 	SL_MAX_VERSION,                         ///< Highest possible saveload version
 };

@@ -27,6 +27,7 @@
 #include "dropdown_type.h"
 #include "dropdown_func.h"
 #include "timer/timer_game_calendar.h"
+#include "timer/timer_game_economy.h"
 
 #include "widgets/stock_widget.h"
 
@@ -83,8 +84,19 @@ private:
 		QUERY_BUY_STOCK,
 		QUERY_SELL_STOCK,
 		QUERY_SELL_INVESTMENT,
+		QUERY_SET_ALERT,
 	};
 	QueryType active_query = QUERY_NONE;
+
+	/** Holds the details of a trade action awaiting user confirmation. */
+	struct PendingAction {
+		QueryType type = QUERY_NONE;       ///< Which trade action is pending.
+		uint16_t units = 0;               ///< Number of units involved.
+		Money estimated_cost = 0;          ///< Estimated total cost or revenue.
+		CompanyID target = CompanyID::Invalid(); ///< Target company (for buy/sell).
+		StockOrderID order_id = INVALID_STOCK_ORDER_ID; ///< Order to fill (for buy).
+	};
+	PendingAction pending_action{};
 
 	/** Rebuild the list of other listed companies. */
 	void BuildCompanyList()
@@ -162,6 +174,19 @@ private:
 		return cheapest;
 	}
 
+	/**
+	 * Check whether the local company has a price alert set on a given company.
+	 * @param target Company to check.
+	 * @return true if an active alert exists for that company.
+	 */
+	static bool HasAlertOn(CompanyID target)
+	{
+		for (const auto &a : _stock_order_book.alerts) {
+			if (a.owner == _local_company && a.target == target) return true;
+		}
+		return false;
+	}
+
 public:
 	StockMarketWindow(WindowDesc &desc, WindowNumber window_number) : Window(desc)
 	{
@@ -232,6 +257,11 @@ public:
 		bool is_own_company = (this->selected_company == _local_company);
 		this->SetWidgetDisabledState(WID_STM_BUY_BUTTON, no_selection || is_own_company);
 		this->SetWidgetDisabledState(WID_STM_SELL_BUTTON, no_selection || is_own_company);
+
+		/* Alert buttons: enabled only when a non-own company is selected. */
+		bool has_alert = !no_selection && !is_own_company && HasAlertOn(this->selected_company);
+		this->SetWidgetDisabledState(WID_STM_SET_ALERT_BUTTON, no_selection || is_own_company || has_alert);
+		this->SetWidgetDisabledState(WID_STM_CLEAR_ALERT_BUTTON, no_selection || is_own_company || !has_alert);
 
 		/* Disable sell investment button if no investment selected. */
 		this->SetWidgetDisabledState(WID_STM_SELL_INVESTMENT_BUTTON, this->selected_investment == CompanyID::Invalid());
@@ -331,8 +361,55 @@ public:
 				GetString(STR_STOCK_INFO_LAST_PROFIT, last_quarter_profit));
 		}
 
-		/* Fifth row - Dividend schedule */
-		DrawString(ir.left, ir.right, y + GetCharacterHeight(FS_NORMAL) * 5, STR_STOCK_DIVIDEND_SCHEDULE);
+		/* Fifth and sixth rows - Dividend calendar */
+		if (!si.listed) {
+			DrawString(ir.left, ir.right, y + GetCharacterHeight(FS_NORMAL) * 5, STR_STOCK_DIVIDEND_NOT_LISTED);
+		} else if (si.last_dividend_date == TimerGameEconomy::Date{}) {
+			DrawString(ir.left, ir.right, y + GetCharacterHeight(FS_NORMAL) * 5, STR_STOCK_DIVIDEND_NO_HISTORY);
+		} else {
+			/* Estimate next dividend date as the year boundary after last payment.
+			 * The annual dividend fires when the economy year rolls over, so we advance
+			 * by the number of days in the year that followed the last payment. */
+			TimerGameEconomy::YearMonthDay last_ymd = TimerGameEconomy::ConvertDateToYMD(si.last_dividend_date);
+			TimerGameEconomy::Year next_year = last_ymd.year + 1;
+			TimerGameEconomy::Date next_dividend_date = TimerGameEconomy::ConvertYMDToDate(next_year, 0, 1);
+
+			/* Convert economy date to calendar date for display. */
+			TimerGameCalendar::Date display_next{next_dividend_date.base()};
+
+			int64_t days_until = (next_dividend_date - TimerGameEconomy::date).base();
+			if (days_until < 0) days_until = 0;
+
+			DrawString(ir.left, ir.right, y + GetCharacterHeight(FS_NORMAL) * 5,
+				GetString(STR_STOCK_DIVIDEND_NEXT, display_next, days_until));
+
+			/* Estimate dividend per unit and total payout using same formula as PayAnnualDividends(). */
+			int num_quarters = std::min<int>(my->num_valid_stat_ent, 4);
+			if (num_quarters > 0) {
+				Money total_profit = 0;
+				for (int i = 0; i < num_quarters; i++) {
+					total_profit += my->old_economy[i].income + my->old_economy[i].expenses;
+				}
+				if (total_profit > 0) {
+					Money dividend_pool = total_profit * _settings_game.economy.stock_dividend_rate / 100;
+					uint16_t held_units = si.GetHeldUnits();
+					uint16_t escrowed_units = 0;
+					for (const auto &order : _stock_order_book.orders) {
+						if (order.target != my->index) continue;
+						if (order.placer == order.target) continue;
+						if (order.is_market_maker) continue;
+						escrowed_units += order.GetRemainingUnits();
+					}
+					uint16_t total_units = held_units + escrowed_units;
+					if (total_units > 0) {
+						Money est_per_unit = dividend_pool / total_units;
+						Money est_total = est_per_unit * static_cast<int64_t>(total_units);
+						DrawString(ir.left, ir.right, y + GetCharacterHeight(FS_NORMAL) * 6,
+							GetString(STR_STOCK_DIVIDEND_ESTIMATE, est_per_unit, est_total));
+					}
+				}
+			}
+		}
 	}
 
 	/** Draw the shareholders scrollable panel. */
@@ -658,8 +735,8 @@ public:
 			case WID_STM_MY_COMPANY_PANEL:
 				this->icon = GetSpriteSize(SPR_COMPANY_ICON);
 				this->line_height = std::max<int>(this->icon.height + WidgetDimensions::scaled.vsep_normal, GetCharacterHeight(FS_NORMAL) + 2);
-				/* 6 lines: rows 0-3 existing info, row 4 cash/last-profit, row 5 dividend schedule. */
-				size.height = GetCharacterHeight(FS_NORMAL) * 6 + WidgetDimensions::scaled.framerect.Vertical();
+				/* 7 lines: rows 0-4 existing info, row 5 next dividend date, row 6 estimated payout. */
+				size.height = GetCharacterHeight(FS_NORMAL) * 7 + WidgetDimensions::scaled.framerect.Vertical();
 				break;
 
 			case WID_STM_SHAREHOLDERS_PANEL:
@@ -726,7 +803,11 @@ public:
 					if (my == nullptr) break;
 					uint16_t max_issue = MAX_STOCK_UNITS - my->stock_info.total_issued;
 					if (max_issue > 0) {
-						Command<Commands::ListCompanyStock>::Post(STR_ERROR_STOCK_TOO_MANY_SHARES, max_issue, Money(0));
+						this->pending_action = {QUERY_ISSUE_SHARES, max_issue, Money(0), CompanyID::Invalid(), INVALID_STOCK_ORDER_ID};
+						ShowQuery(
+							GetEncodedString(STR_STOCK_CONFIRM_TITLE),
+							GetEncodedString(STR_STOCK_CONFIRM_ISSUE, max_issue),
+							this, StockMarketWindow::ConfirmTradeCallback);
 					}
 				} else {
 					ShowQueryString({}, STR_STOCK_ISSUE_SHARES_QUERY, 10, this, CS_NUMERAL, {});
@@ -742,7 +823,11 @@ public:
 				if (_ctrl_pressed) {
 					/* Buy back all held shares. */
 					if (held > 0) {
-						Command<Commands::BuybackStock>::Post(STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK, held, Money(0));
+						this->pending_action = {QUERY_BUYBACK_SHARES, held, Money(0), CompanyID::Invalid(), INVALID_STOCK_ORDER_ID};
+						ShowQuery(
+							GetEncodedString(STR_STOCK_CONFIRM_TITLE),
+							GetEncodedString(STR_STOCK_CONFIRM_BUYBACK, held),
+							this, StockMarketWindow::ConfirmTradeCallback);
 					}
 				} else {
 					ShowQueryString({}, STR_STOCK_BUYBACK_SHARES_QUERY, 10, this, CS_NUMERAL, {});
@@ -786,8 +871,13 @@ public:
 				if (holding == nullptr || holding->units == 0) break;
 
 				if (_ctrl_pressed) {
-					/* Sell all at current market price. */
-					Command<Commands::PlaceSellOrder>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_investment, holding->units, target->stock_info.share_price);
+					/* Sell all at current market price — show confirmation first. */
+					Money est_revenue = target->stock_info.share_price * static_cast<int64_t>(holding->units);
+					this->pending_action = {QUERY_SELL_INVESTMENT, holding->units, est_revenue, this->selected_investment, INVALID_STOCK_ORDER_ID};
+					ShowQuery(
+						GetEncodedString(STR_STOCK_CONFIRM_TITLE),
+						GetEncodedString(STR_STOCK_CONFIRM_SELL, holding->units, this->selected_investment, est_revenue),
+						this, StockMarketWindow::ConfirmTradeCallback);
 				} else {
 					ShowQueryString({}, STR_STOCK_SELL_INVESTMENT_QUERY, 10, this, CS_NUMERAL, {});
 					this->active_query = QUERY_SELL_INVESTMENT;
@@ -798,10 +888,16 @@ public:
 			case WID_STM_BUY_BUTTON: {
 				if (this->selected_company == CompanyID::Invalid()) break;
 				if (_ctrl_pressed) {
-					/* Buy maximum from cheapest order. */
+					/* Buy maximum from cheapest order — show confirmation first. */
 					const StockOrder *cheapest = FindCheapestOrder(this->selected_company);
 					if (cheapest != nullptr) {
-						Command<Commands::FillSellOrder>::Post(STR_ERROR_STOCK_CANNOT_BUY, cheapest->order_id, cheapest->GetRemainingUnits());
+						uint16_t buy_units = cheapest->GetRemainingUnits();
+						Money est_cost = cheapest->price * static_cast<int64_t>(buy_units);
+						this->pending_action = {QUERY_BUY_STOCK, buy_units, est_cost, this->selected_company, cheapest->order_id};
+						ShowQuery(
+							GetEncodedString(STR_STOCK_CONFIRM_TITLE),
+							GetEncodedString(STR_STOCK_CONFIRM_BUY, buy_units, this->selected_company, est_cost),
+							this, StockMarketWindow::ConfirmTradeCallback);
 					}
 				} else {
 					ShowQueryString({}, STR_STOCK_MARKET_BUY_QUERY, 10, this, CS_NUMERAL, {});
@@ -881,18 +977,54 @@ public:
 			case WID_STM_SELL_BUTTON: {
 				if (this->selected_company == CompanyID::Invalid()) break;
 				if (_ctrl_pressed) {
-					/* Sell all holdings at current market price. */
+					/* Sell all holdings at current market price — show confirmation first. */
 					const Company *target = Company::GetIfValid(this->selected_company);
 					if (target != nullptr) {
 						const StockHolding *holding = target->stock_info.FindHolder(_local_company);
 						if (holding != nullptr && holding->units > 0) {
-							Command<Commands::PlaceSellOrder>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_company, holding->units, target->stock_info.share_price);
+							Money est_revenue = target->stock_info.share_price * static_cast<int64_t>(holding->units);
+							this->pending_action = {QUERY_SELL_STOCK, holding->units, est_revenue, this->selected_company, INVALID_STOCK_ORDER_ID};
+							ShowQuery(
+								GetEncodedString(STR_STOCK_CONFIRM_TITLE),
+								GetEncodedString(STR_STOCK_CONFIRM_SELL, holding->units, this->selected_company, est_revenue),
+								this, StockMarketWindow::ConfirmTradeCallback);
 						}
 					}
 				} else {
 					ShowQueryString({}, STR_STOCK_MARKET_SELL_QUERY, 10, this, CS_NUMERAL, {});
 					this->active_query = QUERY_SELL_STOCK;
 				}
+				break;
+			}
+
+			case WID_STM_SET_ALERT_BUTTON: {
+				if (this->selected_company == CompanyID::Invalid()) break;
+				/* Ctrl+Click sets an alert for price going below current price. */
+				const Company *target = Company::GetIfValid(this->selected_company);
+				if (target == nullptr) break;
+				if (_ctrl_pressed) {
+					/* Below-current-price alert with an initial guess of 90% of current price. */
+					Money default_price = target->stock_info.share_price * 9 / 10;
+					if (default_price <= 0) default_price = 1;
+					ShowQueryString(GetString(STR_JUST_INT, default_price), STR_STOCK_ALERT_QUERY, 20, this, CS_NUMERAL, {});
+					this->pending_action.type = QUERY_SET_ALERT;
+					this->pending_action.target = this->selected_company;
+					/* Use units field as a bool flag: 0 = alert_below, 1 = alert_above */
+					this->pending_action.units = 0;
+				} else {
+					Money default_price = target->stock_info.share_price * 11 / 10;
+					ShowQueryString(GetString(STR_JUST_INT, default_price), STR_STOCK_ALERT_QUERY, 20, this, CS_NUMERAL, {});
+					this->pending_action.type = QUERY_SET_ALERT;
+					this->pending_action.target = this->selected_company;
+					this->pending_action.units = 1;
+				}
+				this->active_query = QUERY_SET_ALERT;
+				break;
+			}
+
+			case WID_STM_CLEAR_ALERT_BUTTON: {
+				if (this->selected_company == CompanyID::Invalid()) break;
+				Command<Commands::ClearPriceAlert>::Post(STR_ERROR_STOCK_COMPANY_NOT_LISTED, this->selected_company);
 				break;
 			}
 		}
@@ -909,14 +1041,24 @@ public:
 			case QUERY_ISSUE_SHARES: {
 				auto value = ParseInteger<uint64_t>(*str, 10, true);
 				if (!value.has_value() || *value == 0) return;
-				Command<Commands::ListCompanyStock>::Post(STR_ERROR_STOCK_TOO_MANY_SHARES, static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX)), Money(0));
+				uint16_t units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
+				this->pending_action = {QUERY_ISSUE_SHARES, units, Money(0), CompanyID::Invalid(), INVALID_STOCK_ORDER_ID};
+				ShowQuery(
+					GetEncodedString(STR_STOCK_CONFIRM_TITLE),
+					GetEncodedString(STR_STOCK_CONFIRM_ISSUE, units),
+					this, StockMarketWindow::ConfirmTradeCallback);
 				break;
 			}
 
 			case QUERY_BUYBACK_SHARES: {
 				auto value = ParseInteger<uint64_t>(*str, 10, true);
 				if (!value.has_value() || *value == 0) return;
-				Command<Commands::BuybackStock>::Post(STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK, static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX)), Money(0));
+				uint16_t units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
+				this->pending_action = {QUERY_BUYBACK_SHARES, units, Money(0), CompanyID::Invalid(), INVALID_STOCK_ORDER_ID};
+				ShowQuery(
+					GetEncodedString(STR_STOCK_CONFIRM_TITLE),
+					GetEncodedString(STR_STOCK_CONFIRM_BUYBACK, units),
+					this, StockMarketWindow::ConfirmTradeCallback);
 				break;
 			}
 
@@ -924,12 +1066,16 @@ public:
 				if (this->selected_company == CompanyID::Invalid()) return;
 				auto value = ParseInteger<uint64_t>(*str, 10, true);
 				if (!value.has_value() || *value == 0) return;
-				/* Buy from cheapest available order. */
+				uint16_t units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
+				/* Show confirmation using cheapest available order price as estimate. */
 				const StockOrder *cheapest = FindCheapestOrder(this->selected_company);
-				if (cheapest != nullptr) {
-					uint16_t buy_units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
-					Command<Commands::FillSellOrder>::Post(STR_ERROR_STOCK_CANNOT_BUY, cheapest->order_id, buy_units);
-				}
+				Money est_cost = (cheapest != nullptr) ? cheapest->price * static_cast<int64_t>(units) : Money(0);
+				StockOrderID order_id = (cheapest != nullptr) ? cheapest->order_id : INVALID_STOCK_ORDER_ID;
+				this->pending_action = {QUERY_BUY_STOCK, units, est_cost, this->selected_company, order_id};
+				ShowQuery(
+					GetEncodedString(STR_STOCK_CONFIRM_TITLE),
+					GetEncodedString(STR_STOCK_CONFIRM_BUY, units, this->selected_company, est_cost),
+					this, StockMarketWindow::ConfirmTradeCallback);
 				break;
 			}
 
@@ -937,12 +1083,15 @@ public:
 				if (this->selected_company == CompanyID::Invalid()) return;
 				auto value = ParseInteger<uint64_t>(*str, 10, true);
 				if (!value.has_value() || *value == 0) return;
-				/* Place a sell order at current market price. */
+				uint16_t units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
 				const Company *target = Company::GetIfValid(this->selected_company);
-				if (target != nullptr) {
-					uint16_t sell_units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
-					Command<Commands::PlaceSellOrder>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_company, sell_units, target->stock_info.share_price);
-				}
+				if (target == nullptr) return;
+				Money est_revenue = target->stock_info.share_price * static_cast<int64_t>(units);
+				this->pending_action = {QUERY_SELL_STOCK, units, est_revenue, this->selected_company, INVALID_STOCK_ORDER_ID};
+				ShowQuery(
+					GetEncodedString(STR_STOCK_CONFIRM_TITLE),
+					GetEncodedString(STR_STOCK_CONFIRM_SELL, units, this->selected_company, est_revenue),
+					this, StockMarketWindow::ConfirmTradeCallback);
 				break;
 			}
 
@@ -950,13 +1099,76 @@ public:
 				if (this->selected_investment == CompanyID::Invalid()) return;
 				auto value = ParseInteger<uint64_t>(*str, 10, true);
 				if (!value.has_value() || *value == 0) return;
+				uint16_t units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
 				const Company *target = Company::GetIfValid(this->selected_investment);
-				if (target != nullptr) {
-					uint16_t sell_units = static_cast<uint16_t>(std::min<uint64_t>(*value, UINT16_MAX));
-					Command<Commands::PlaceSellOrder>::Post(STR_ERROR_STOCK_CANNOT_SELL, this->selected_investment, sell_units, target->stock_info.share_price);
-				}
+				if (target == nullptr) return;
+				Money est_revenue = target->stock_info.share_price * static_cast<int64_t>(units);
+				this->pending_action = {QUERY_SELL_INVESTMENT, units, est_revenue, this->selected_investment, INVALID_STOCK_ORDER_ID};
+				ShowQuery(
+					GetEncodedString(STR_STOCK_CONFIRM_TITLE),
+					GetEncodedString(STR_STOCK_CONFIRM_SELL, units, this->selected_investment, est_revenue),
+					this, StockMarketWindow::ConfirmTradeCallback);
 				break;
 			}
+
+			case QUERY_SET_ALERT: {
+				if (this->pending_action.target == CompanyID::Invalid()) return;
+				auto value = ParseInteger<uint64_t>(*str, 10, true);
+				if (!value.has_value() || *value == 0) return;
+				Money target_price = static_cast<Money>(*value);
+				bool alert_above = (this->pending_action.units != 0);
+				Command<Commands::SetPriceAlert>::Post(STR_ERROR_STOCK_COMPANY_NOT_LISTED,
+					this->pending_action.target, target_price, alert_above);
+				break;
+			}
+
+			default:
+				break;
+		}
+	}
+
+	/**
+	 * Callback invoked by the confirmation dialog.
+	 * Posts the pending stock trade command if the user clicked "Yes".
+	 * @param win       Pointer to the parent StockMarketWindow.
+	 * @param confirmed True when the user clicked "Yes".
+	 */
+	static void ConfirmTradeCallback(Window *win, bool confirmed)
+	{
+		if (!confirmed) return;
+
+		StockMarketWindow *w = dynamic_cast<StockMarketWindow *>(win);
+		if (w == nullptr) return;
+
+		/* Snapshot and reset the pending action before posting so that a command
+		 * error or re-entrancy cannot leave stale state in the window. */
+		PendingAction action = w->pending_action;
+		w->pending_action = {};
+
+		switch (action.type) {
+			case QUERY_ISSUE_SHARES:
+				Command<Commands::ListCompanyStock>::Post(STR_ERROR_STOCK_TOO_MANY_SHARES, action.units, Money(0));
+				break;
+
+			case QUERY_BUYBACK_SHARES:
+				Command<Commands::BuybackStock>::Post(STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK, action.units, Money(0));
+				break;
+
+			case QUERY_BUY_STOCK:
+				if (action.order_id != INVALID_STOCK_ORDER_ID) {
+					Command<Commands::FillSellOrder>::Post(STR_ERROR_STOCK_CANNOT_BUY, action.order_id, action.units);
+				}
+				break;
+
+			case QUERY_SELL_STOCK:
+			case QUERY_SELL_INVESTMENT:
+				if (action.target != CompanyID::Invalid()) {
+					const Company *target = Company::GetIfValid(action.target);
+					if (target != nullptr) {
+						Command<Commands::PlaceSellOrder>::Post(STR_ERROR_STOCK_CANNOT_SELL, action.target, action.units, target->stock_info.share_price);
+					}
+				}
+				break;
 
 			default:
 				break;
@@ -1072,6 +1284,8 @@ static constexpr std::initializer_list<NWidgetPart> _nested_stock_market_widgets
 	NWidget(NWID_HORIZONTAL, NWidContainerFlag::EqualSize),
 		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_BUY_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_MARKET_BUY, STR_STOCK_MARKET_BUY_TOOLTIP),
 		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_SELL_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_MARKET_SELL, STR_STOCK_MARKET_SELL_TOOLTIP),
+		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_SET_ALERT_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_SET_ALERT, STR_STOCK_SET_ALERT_TOOLTIP),
+		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_CLEAR_ALERT_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_CLEAR_ALERT, STR_STOCK_CLEAR_ALERT_TOOLTIP),
 		NWidget(WWT_PUSHTXTBTN, COLOUR_BROWN, WID_STM_PRICE_GRAPH_BUTTON), SetMinimalSize(100, 12), SetFill(1, 0), SetStringTip(STR_STOCK_SHOW_PRICE_GRAPH, STR_STOCK_SHOW_PRICE_GRAPH_TOOLTIP),
 	EndContainer(),
 };
