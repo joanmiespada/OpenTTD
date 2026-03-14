@@ -16,6 +16,7 @@
 #include "palette_func.h"
 #include "settings_gui.h"
 #include "string_func.h"
+#include "stringfilter_type.h"
 #include "strings_func.h"
 #include "window_gui.h"
 
@@ -61,6 +62,13 @@ public:
 	explicit DropDownString(std::string &&string, Args&&... args) : TBase(std::forward<Args>(args)...)
 	{
 		this->SetString(std::move(string));
+	}
+
+	/** @copydoc DropDownListItem::FilterText */
+	void FilterText(StringFilter &string_filter) const override
+	{
+		string_filter.AddLine(this->string);
+		this->TBase::FilterText(string_filter);
 	}
 
 	void SetString(std::string &&string)
@@ -299,9 +307,9 @@ public:
 	bool Selectable() const override { return false; }
 };
 
-using DropDownListDividerItem = DropDownDivider<DropDownListItem>;
-using DropDownListStringItem = DropDownString<DropDownListItem>;
-using DropDownListIconItem = DropDownIcon<DropDownString<DropDownListItem>>;
-using DropDownListCheckedItem = DropDownIndent<DropDownCheck<DropDownString<DropDownListItem>>>;
+using DropDownListDividerItem = DropDownDivider<DropDownListItem>; ///< Drop down list item that divides list horizontally into two parts.
+using DropDownListStringItem = DropDownString<DropDownListItem>; ///< Drop down list item that contains a single string.
+using DropDownListIconItem = DropDownIcon<DropDownString<DropDownListItem>>; ///< Drop down list item that contains a single string and an icon.
+using DropDownListCheckedItem = DropDownIndent<DropDownCheck<DropDownString<DropDownListItem>>>; ///< Drop down list item with a single string and a space for tick.
 
 #endif /* DROPDOWN_COMMON_TYPE_H */
