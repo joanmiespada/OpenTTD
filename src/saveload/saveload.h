@@ -414,6 +414,15 @@ enum SaveLoadVersion : uint16_t {
 	SLV_ENGINE_MULTI_RAILTYPE,              ///< 362  PR#14357 v15.0 Train engines can have multiple railtypes.
 	SLV_SIGN_TEXT_COLOURS,                  ///< 363  PR#14743 Configurable sign text colors in scenario editor.
 	SLV_BUOYS_AT_0_0,                       ///< 364  PR#14983 Allow to build buoys at (0x0).
+	SLV_STOCK_MARKET,                       ///< 365  Stock marketplace for companies.
+	SLV_STOCK_ORDER_BOOK,                   ///< 366  Stock market order book and price history.
+	SLV_STOCK_MARKET_V2,                    ///< 367  Stock market buy orders and hostile takeovers.
+	SLV_STOCK_MARKET_V3,                    ///< 368  Stock market maker automated orders.
+	SLV_STOCK_MARKET_V4,                    ///< 369  Stock market previous quarter price for change indicators.
+	SLV_STOCK_MARKET_V5,                    ///< 370  Stock market IPO lock-up date for issuer sell restriction.
+	SLV_STOCK_MARKET_V6,                    ///< 371  Stock market event log per order book.
+	SLV_STOCK_MARKET_V7,                    ///< 372  Stock market price alerts per order book.
+	SLV_STOCK_MARKET_V8,                    ///< 373  Stock market dividend payment date tracking.
 
 	SL_MAX_VERSION,                         ///< Highest possible saveload version
 };

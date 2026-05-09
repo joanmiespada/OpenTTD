@@ -38,6 +38,7 @@
 #include "../settings_cmd.h"
 #include "../signs_cmd.h"
 #include "../station_cmd.h"
+#include "../stock_cmd.h"
 #include "../story_cmd.h"
 #include "../subsidy_cmd.h"
 #include "../terraform_cmd.h"

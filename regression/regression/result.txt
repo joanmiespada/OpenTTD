@@ -1,3 +1,38 @@
+Your script made an error: your info.nut/library.nut doesn't have the method 'GetAuthor'
+
+CALLSTACK WITH LOCALS
+*FUNCTION [main()] 434d4149-cargomasterai-2.0.4.tar/cargomasterai-2.0.4/info.nut line [10]
+  [this] TABLE
+Your script made an error: unknown error
+
+CALLSTACK WITH LOCALS
+*FUNCTION [main()] 4e434753-newcitygrowthscript-1.1.tar/newcitygrowthscript-1.1/info.nut line [116]
+  [this] TABLE
+Your script made an error: your info.nut/library.nut doesn't have the method 'GetAuthor'
+
+CALLSTACK WITH LOCALS
+*FUNCTION [main()] 434d4149-cargomasterai-2.0.4.tar/cargomasterai-2.0.4/info.nut line [10]
+  [this] TABLE
+Your script made an error: your info.nut/library.nut doesn't have the method 'GetAuthor'
+
+CALLSTACK WITH LOCALS
+*FUNCTION [main()] 434d4149-cargomasterai-2.0.4.tar/cargomasterai-2.0.4/info.nut line [10]
+  [this] TABLE
+Your script made an error: unknown error
+
+CALLSTACK WITH LOCALS
+*FUNCTION [main()] 4e434753-newcitygrowthscript-1.1.tar/newcitygrowthscript-1.1/info.nut line [116]
+  [this] TABLE
+Your script made an error: your info.nut/library.nut doesn't have the method 'GetAuthor'
+
+CALLSTACK WITH LOCALS
+*FUNCTION [main()] 434d4149-cargomasterai-2.0.4.tar/cargomasterai-2.0.4/info.nut line [10]
+  [this] TABLE
+Your script made an error: your info.nut/library.nut doesn't have the method 'GetAuthor'
+
+CALLSTACK WITH LOCALS
+*FUNCTION [main()] 434d4149-cargomasterai-2.0.4.tar/cargomasterai-2.0.4/info.nut line [10]
+  [this] TABLE
 
 --TestInit--
  Ops:      9988

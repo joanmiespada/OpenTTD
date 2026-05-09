@@ -562,6 +562,12 @@ enum WindowClass : uint16_t {
 	WC_COMPANY_VALUE,
 
 	/**
+	 * Stock price graph; %Window numbers:
+	 *   - 0 = #GraphWidgets
+	 */
+	WC_STOCK_PRICE_GRAPH,
+
+	/**
 	 * Company league window; %Window numbers:
 	 *   - 0 = #CompanyLeagueWidgets
 	 */
@@ -731,6 +737,12 @@ enum WindowClass : uint16_t {
 	 *   - 0 = #HelpWindowWidgets
 	 */
 	WC_HELPWIN,
+
+	/**
+	 * Stock marketplace window; %Window numbers:
+	 *   - 0 = #StockMarketWidgets
+	 */
+	WC_STOCK_MARKET,
 
 	WC_INVALID = 0xFFFF, ///< Invalid window.
 };

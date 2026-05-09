@@ -621,6 +621,7 @@ STR_GRAPH_INCOME_CAPTION                                        :{WHITE}Income G
 STR_GRAPH_CARGO_DELIVERED_CAPTION                               :{WHITE}Units of cargo delivered
 STR_GRAPH_COMPANY_PERFORMANCE_RATINGS_CAPTION                   :{WHITE}Company performance ratings (maximum rating=1000)
 STR_GRAPH_COMPANY_VALUES_CAPTION                                :{WHITE}Company Value Graph
+STR_GRAPH_STOCK_PRICE_CAPTION                                   :{WHITE}Stock Price History
 
 STR_GRAPH_LAST_24_MINUTES_TIME_LABEL                            :{TINY_FONT}{BLACK}Last 24 minutes
 STR_GRAPH_LAST_72_MINUTES_TIME_LABEL                            :{TINY_FONT}{BLACK}Last 72 minutes
@@ -673,6 +674,163 @@ STR_COMPANY_LEAGUE_PERFORMANCE_TITLE_CHIEF_EXECUTIVE            :Chief Executive
 STR_COMPANY_LEAGUE_PERFORMANCE_TITLE_CHAIRMAN                   :Chairperson
 STR_COMPANY_LEAGUE_PERFORMANCE_TITLE_PRESIDENT                  :President
 STR_COMPANY_LEAGUE_PERFORMANCE_TITLE_TYCOON                     :Tycoon
+
+# Stock marketplace window
+STR_STOCK_MARKET_CAPTION                                        :{WHITE}Stock Management
+STR_STOCK_MARKET_MENU                                           :Stock marketplace
+
+# My Company Stock section
+STR_STOCK_MY_COMPANY_TITLE                                      :{BLACK}My Company Stock
+STR_STOCK_INFO_LISTED                                           :{BLACK}Listed: {STRING}
+STR_STOCK_INFO_LISTED_YES                                       :{GREEN}Yes
+STR_STOCK_INFO_LISTED_NO                                        :{RED}No
+STR_STOCK_INFO_SHARE_PRICE                                      :{BLACK}Share Price: {CURRENCY_LONG}
+STR_STOCK_INFO_TOTAL_ISSUED                                     :{BLACK}Total Issued: {COMMA} units
+STR_STOCK_INFO_AVAILABLE                                        :{BLACK}Available: {COMMA} units
+STR_STOCK_INFO_LAST_DIVIDEND                                    :{BLACK}Last Dividend: {CURRENCY_LONG} / unit
+STR_STOCK_INFO_TOTAL_DIVIDENDS                                  :{BLACK}Total Dividends Paid: {CURRENCY_LONG}
+STR_STOCK_INFO_MARKET_CAP                                       :{BLACK}Market Cap: {CURRENCY_LONG}
+STR_STOCK_INFO_PE_RATIO                                         :{BLACK}P/E Ratio: {NUM}
+STR_STOCK_INFO_CASH                                             :{BLACK}Cash: {CURRENCY_LONG}
+STR_STOCK_INFO_LAST_PROFIT                                      :{BLACK}Last Quarter: {CURRENCY_LONG}
+STR_STOCK_DIVIDEND_NEXT                                         :{BLACK}Next dividend: ~{DATE_LONG} (in {NUM} days)
+STR_STOCK_DIVIDEND_ESTIMATE                                     :{BLACK}Est. per unit: {CURRENCY_LONG}  Total payout: {CURRENCY_LONG}
+STR_STOCK_DIVIDEND_NO_HISTORY                                   :{BLACK}No dividends paid yet (paid annually)
+STR_STOCK_DIVIDEND_NOT_LISTED                                   :{BLACK}Company not listed on the market
+STR_STOCK_ISSUE_SHARES                                          :{BLACK}Issue Shares
+STR_STOCK_ISSUE_SHARES_TOOLTIP                                  :{BLACK}Issue new shares on the market. Ctrl+Click to issue maximum
+STR_STOCK_ISSUE_SHARES_QUERY                                    :Enter the number of share units to issue
+STR_STOCK_BUYBACK_SHARES                                        :{BLACK}Buyback Shares
+STR_STOCK_BUYBACK_SHARES_TOOLTIP                                :{BLACK}Buy back shares from the market. Ctrl+Click to buy back all available
+STR_STOCK_BUYBACK_SHARES_QUERY                                  :Enter the number of share units to buy back
+STR_STOCK_SHAREHOLDERS_HEADER                                   :{BLACK}Shareholders
+STR_STOCK_SHAREHOLDER_LINE                                      :{BLACK}{STRING} - {COMMA} units ({COMMA}%)
+STR_STOCK_NO_SHAREHOLDERS                                       :{BLACK}No shareholders
+
+# My Investments section
+STR_STOCK_INVESTMENTS_HEADER                                    :{BLACK}My Investments
+STR_STOCK_NO_INVESTMENTS                                        :{BLACK}No investments
+STR_STOCK_PORTFOLIO_SUMMARY                                     :{BLACK}Portfolio: {CURRENCY_LONG}  P/L: {CURRENCY_LONG}
+STR_STOCK_INVESTMENT_LINE                                       :{BLACK}{STRING} - {COMMA} units ({CURRENCY_LONG}) {STRING}
+STR_STOCK_INVESTMENT_PL_POSITIVE                                :{GREEN}+{CURRENCY_LONG}
+STR_STOCK_INVESTMENT_PL_NEGATIVE                                :{RED}{CURRENCY_LONG}
+STR_STOCK_SELL_INVESTMENT                                       :{BLACK}Sell Investment
+STR_STOCK_SELL_INVESTMENT_TOOLTIP                               :{BLACK}Place sell order for selected investment. Ctrl+Click sells all
+STR_STOCK_SELL_INVESTMENT_QUERY                                 :Enter number of units to sell
+
+# Stock Market section
+STR_STOCK_MARKET_TITLE                                          :{BLACK}Stock Market
+STR_STOCK_MARKET_HEADER_COMPANY                                 :{WHITE}Company
+STR_STOCK_MARKET_HEADER_PRICE                                   :{WHITE}Share Price
+STR_STOCK_MARKET_HEADER_AVAILABLE                               :{WHITE}Available
+STR_STOCK_MARKET_HEADER_YOUR_SHARES                             :{WHITE}Holdings
+STR_STOCK_MARKET_HEADER_PL                                      :{WHITE}P&&L
+STR_STOCK_MARKET_HEADER_YIELD                                   :{BLACK}Yield
+STR_STOCK_MARKET_YIELD_VALUE                                    :{COMMA}bp
+STR_STOCK_PRICE_UP                                              :{UP_ARROW}
+STR_STOCK_PRICE_DOWN                                            :{DOWN_ARROW}
+STR_STOCK_MARKET_UNITS_FRACTION                                 :{COMMA} / {COMMA}
+STR_STOCK_MARKET_BUY                                            :{BLACK}Buy Shares
+STR_STOCK_MARKET_BUY_TOOLTIP                                    :{BLACK}Buy shares of the selected company. Ctrl+Click to buy maximum available
+STR_STOCK_MARKET_BUY_QUERY                                      :Enter the number of share units to buy
+STR_STOCK_MARKET_SELL                                           :{BLACK}Sell Shares
+STR_STOCK_MARKET_SELL_TOOLTIP                                   :{BLACK}Sell shares of the selected company. Ctrl+Click to sell all holdings
+STR_STOCK_MARKET_SELL_QUERY                                     :Enter the number of share units to sell
+STR_STOCK_SHOW_PRICE_GRAPH                                      :{BLACK}Price Graph
+STR_STOCK_SHOW_PRICE_GRAPH_TOOLTIP                              :{BLACK}Show stock price history graph
+STR_STOCK_SORT_PRICE                                            :{BLACK}Sort: Price
+STR_STOCK_SORT_NAME                                             :{BLACK}Sort: Name
+STR_STOCK_SORT_YIELD                                            :{BLACK}Sort: Yield
+STR_STOCK_SORT_MARKET_CAP                                       :{BLACK}Sort: Market Cap
+STR_STOCK_MARKET_STATS                                          :{BLACK}Listed: {NUM}  Total Market Cap: {CURRENCY_LONG}  Avg Price: {CURRENCY_LONG}
+STR_STOCK_FILTER_ALL                                            :{BLACK}All
+STR_STOCK_FILTER_HOLDINGS                                       :{BLACK}My Holdings
+STR_STOCK_FILTER_TOGGLE_TOOLTIP                                 :{BLACK}Toggle between showing all companies or only companies you hold shares in
+STR_STOCK_MARKET_BUY_QUERY_COST                                 :Enter the number of share units to buy (est. cost: {CURRENCY_LONG} each)
+STR_STOCK_MARKET_SELL_QUERY_VALUE                               :Enter the number of share units to sell (est. value: {CURRENCY_LONG} each)
+
+# Order book section
+STR_STOCK_ORDER_BOOK_CAPTION                                    :{BLACK}Order Book
+STR_STOCK_ORDER_BOOK_BID_HEADER                                 :{GREEN}Bids (Buy)
+STR_STOCK_ORDER_BOOK_ASK_HEADER                                 :{RED}Asks (Sell)
+STR_STOCK_ORDER_BOOK_ENTRY_BID                                  :{GREEN}{CURRENCY_LONG} x {COMMA}
+STR_STOCK_ORDER_BOOK_ENTRY_ASK                                  :{RED}{CURRENCY_LONG} x {COMMA}
+STR_STOCK_ORDER_BOOK_EMPTY                                      :{BLACK}No orders
+
+# Transaction history section
+STR_STOCK_TRANSACTION_CAPTION                                   :{BLACK}Transaction History
+STR_STOCK_NO_TRANSACTIONS                                       :{BLACK}No transactions recorded
+STR_STOCK_TRANSACTION_LINE                                      :{BLACK}{DATE_SHORT}: {COMPANY} bought {COMPANY} x{NUM} @{CURRENCY_LONG} = {CURRENCY_LONG}
+
+STR_ERROR_STOCK_MARKET_DISABLED                                 :{WHITE}Stock marketplace is disabled
+STR_ERROR_STOCK_NOT_LISTED                                      :{WHITE}This company has not issued stock
+STR_ERROR_STOCK_TOO_MANY_SHARES                                 :{WHITE}Cannot issue more stock... maximum issuance reached
+STR_ERROR_STOCK_NOT_ENOUGH_AVAILABLE                            :{WHITE}Not enough shares available on the market
+STR_ERROR_STOCK_NOT_ENOUGH_HOLDINGS                             :{WHITE}You don't own enough shares to sell
+STR_ERROR_STOCK_CANNOT_BUY_OWN                                  :{WHITE}Cannot buy your own company's stock
+STR_ERROR_STOCK_CANNOT_BUY                                      :{WHITE}Cannot buy stock...
+STR_ERROR_STOCK_CANNOT_SELL                                     :{WHITE}Cannot sell stock...
+STR_ERROR_STOCK_NOT_ENOUGH_TO_BUYBACK                           :{WHITE}Not enough shares outstanding to buy back
+STR_ERROR_STOCK_COMPANY_CANNOT_AFFORD                           :{WHITE}The issuing company cannot afford to buy back shares
+STR_ERROR_STOCK_ORDER_NOT_FOUND                                 :{WHITE}Order not found
+STR_ERROR_STOCK_TOO_MANY_ORDERS                                 :{WHITE}Too many active orders
+STR_ERROR_STOCK_NOT_YOUR_ORDER                                  :{WHITE}This is not your order
+STR_ERROR_STOCK_CANNOT_PLACE_ORDER                              :{WHITE}Cannot place sell order for your own company's stock
+STR_ERROR_STOCK_CANNOT_FILL_ORDER                               :{WHITE}Cannot fill your own sell order
+STR_ERROR_STOCK_IPO_PRICE_TOO_HIGH                              :{WHITE}IPO price too high... maximum is twice the formula valuation
+STR_ERROR_STOCK_INSUFFICIENT_OWNERSHIP                          :{WHITE}You need at least 51% ownership to initiate a takeover
+STR_ERROR_STOCK_TAKEOVER_IN_PROGRESS                            :{WHITE}A takeover attempt is already in progress
+STR_ERROR_STOCK_NO_TAKEOVER                                     :{WHITE}No takeover attempt is pending
+STR_ERROR_STOCK_NOT_YOUR_TAKEOVER                               :{WHITE}This is not your takeover attempt
+STR_ERROR_STOCK_DEFENSE_PERIOD                                  :{WHITE}The 90-day defense period has not yet elapsed
+STR_ERROR_STOCK_CANNOT_BUY_ORDER                                :{WHITE}Cannot place buy order...
+
+STR_NEWS_STOCK_IPO                                              :{BIG_FONT}{BLACK}{COMPANY} has listed {NUM} stock units at {CURRENCY_LONG} per unit
+STR_NEWS_STOCK_DIVIDEND                                         :{BIG_FONT}{BLACK}{COMPANY} has paid dividends of {CURRENCY_LONG} per unit
+STR_NEWS_STOCK_LARGE_TRADE                                      :{BIG_FONT}{BLACK}{COMPANY} has acquired a large stake in {COMPANY}
+STR_NEWS_STOCK_TAKEOVER_DEFENSE                                 :{BIG_FONT}{BLACK}{COMPANY} is under hostile takeover attempt by {COMPANY}
+STR_NEWS_STOCK_TAKEOVER                                         :{BIG_FONT}{BLACK}{COMPANY} has been taken over by {COMPANY}
+STR_NEWS_STOCK_BUYBACK                                          :{BIG_FONT}{BLACK}{COMPANY} is buying back its own stock
+STR_NEWS_STOCK_ORDER_EXPIRED                                    :{BLACK}Stock orders have expired due to inactivity
+STR_NEWS_STOCK_SPLIT                                            :{BLACK}{COMPANY} has performed a 2:1 stock split
+STR_ERROR_STOCK_SPLIT_PRICE_TOO_LOW                             :{WHITE}Share price too low for stock split
+STR_ERROR_STOCK_SPLIT_TOO_MANY_UNITS                            :{WHITE}Stock split would exceed maximum units
+STR_ERROR_STOCK_CANNOT_DELIST_DURING_TAKEOVER                   :{WHITE}Cannot delist company during active takeover defense
+STR_ERROR_STOCK_IPO_LOCKUP                                      :{WHITE}Cannot sell stock during the 30-day IPO lock-up period
+STR_ERROR_STOCK_MIN_FLOAT                                       :{WHITE}Buyback would reduce public float below the minimum required
+
+STR_STOCK_PLACE_BUY_ORDER                                       :{BLACK}Place Buy Order
+STR_STOCK_PLACE_BUY_ORDER_TOOLTIP                               :{BLACK}Place a standing buy order at a limit price (Ctrl+Click to buy at market price)
+STR_STOCK_BUY_ORDER_UNITS_QUERY                                 :{WHITE}Number of units to bid for:
+STR_STOCK_BUY_ORDER_PRICE_QUERY                                 :{WHITE}Maximum price per unit:
+STR_STOCK_CANCEL_ORDER                                          :{BLACK}Cancel Order
+STR_STOCK_CANCEL_ORDER_TOOLTIP                                  :{BLACK}Cancel the selected order in the order book and return escrowed assets
+STR_STOCK_INITIATE_TAKEOVER                                     :{BLACK}Initiate Takeover
+STR_STOCK_INITIATE_TAKEOVER_TOOLTIP                             :{BLACK}Begin hostile takeover (requires >50% ownership)
+STR_STOCK_EXECUTE_TAKEOVER                                      :{BLACK}Complete Takeover
+STR_STOCK_EXECUTE_TAKEOVER_TOOLTIP                              :{BLACK}Complete the takeover after the defense period
+STR_STOCK_TAKEOVER_STATUS                                       :{RED}Takeover by {COMPANY} - Defense: {NUM} days remaining
+STR_STOCK_MARKET_BIDS                                           :Bids: {NUM}
+
+# Stock trade confirmation dialogs
+STR_STOCK_CONFIRM_TITLE                                         :{WHITE}Confirm Stock Trade
+STR_STOCK_CONFIRM_BUY                                           :{WHITE}Buy {NUM} units of {COMPANY} stock for ~{CURRENCY_LONG}?
+STR_STOCK_CONFIRM_SELL                                          :{WHITE}Sell {NUM} units of {COMPANY} stock for ~{CURRENCY_LONG}?
+STR_STOCK_CONFIRM_ISSUE                                         :{WHITE}Issue {NUM} new share units?
+STR_STOCK_CONFIRM_BUYBACK                                       :{WHITE}Buy back {NUM} share units?
+
+# Stock price alerts
+STR_STOCK_SET_ALERT                                             :{BLACK}Set Price Alert
+STR_STOCK_SET_ALERT_TOOLTIP                                     :{BLACK}Set a notification when this stock reaches a target price. Ctrl+Click to set alert below current price
+STR_STOCK_ALERT_QUERY                                           :Enter target price for alert
+STR_STOCK_CLEAR_ALERT                                           :{BLACK}Clear Alert
+STR_STOCK_CLEAR_ALERT_TOOLTIP                                   :{BLACK}Remove the price alert for this stock
+STR_NEWS_STOCK_PRICE_ALERT_ABOVE                                :{BLACK}{COMPANY} stock has risen to {CURRENCY_LONG} (your alert target: {CURRENCY_LONG})
+STR_NEWS_STOCK_PRICE_ALERT_BELOW                                :{BLACK}{COMPANY} stock has fallen to {CURRENCY_LONG} (your alert target: {CURRENCY_LONG})
+STR_ERROR_STOCK_COMPANY_NOT_LISTED                              :{WHITE}That company is not listed on the stock market
+STR_ERROR_STOCK_CANNOT_SET_ALERT_OWN_COMPANY                    :{WHITE}Cannot set a price alert on your own company's stock
+STR_ERROR_STOCK_ALERT_PRICE_INVALID                             :{WHITE}Alert price must be greater than zero
+STR_ERROR_STOCK_TOO_MANY_ALERTS                                 :{WHITE}You have reached the maximum number of price alerts
 
 # Performance detail window
 STR_PERFORMANCE_DETAIL                                          :{WHITE}Detailed Performance Rating
@@ -1556,6 +1714,15 @@ STR_CONFIG_SETTING_TOWN_CARGO_SCALE_HELPTEXT                    :Scale the cargo
 STR_CONFIG_SETTING_INDUSTRY_CARGO_SCALE                         :Scale industry cargo production: {STRING2}
 STR_CONFIG_SETTING_INDUSTRY_CARGO_SCALE_HELPTEXT                :Scale the cargo production of industries by this percentage
 STR_CONFIG_SETTING_CARGO_SCALE_VALUE                            :{NUM}%
+
+STR_CONFIG_SETTING_STOCK_MARKET                                 :Enable stock marketplace: {STRING2}
+STR_CONFIG_SETTING_STOCK_MARKET_HELPTEXT                        :When enabled, companies can issue stock on the marketplace for other companies to buy and sell. Dividends are paid yearly based on company performance
+STR_CONFIG_SETTING_STOCK_MARKET_MAKER                           :Enable stock market maker: {STRING2}
+STR_CONFIG_SETTING_STOCK_MARKET_MAKER_HELPTEXT                  :When enabled, an automated market maker places small buy and sell orders near the fair value of each listed company, providing baseline liquidity and realistic price movement
+STR_CONFIG_SETTING_STOCK_MAX_ISSUE                              :Maximum stock issuance: {STRING2}
+STR_CONFIG_SETTING_STOCK_MAX_ISSUE_HELPTEXT                     :Maximum percentage of company value that can be issued as stock
+STR_CONFIG_SETTING_STOCK_DIVIDEND_RATE                          :Dividend rate: {STRING2}
+STR_CONFIG_SETTING_STOCK_DIVIDEND_RATE_HELPTEXT                 :Percentage of annual net profit distributed as dividends to shareholders
 
 STR_CONFIG_SETTING_AUTORENEW_VEHICLE                            :Autorenew vehicle when it gets old: {STRING2}
 STR_CONFIG_SETTING_AUTORENEW_VEHICLE_HELPTEXT                   :When enabled, a vehicle nearing its end of life gets automatically replaced when the renew conditions are fulfilled
@@ -3969,9 +4136,10 @@ STR_FINANCES_PERIOD_CAPTION                                     :{WHITE}Period
 STR_FINANCES_REVENUE_TITLE                                      :{WHITE}Revenue
 STR_FINANCES_OPERATING_EXPENSES_TITLE                           :{WHITE}Operating Expenses
 STR_FINANCES_CAPITAL_EXPENSES_TITLE                             :{WHITE}Capital Expenses
+STR_FINANCES_STOCK_TITLE                                        :{WHITE}Stock Market
 
 
-###length 13
+###length 16
 STR_FINANCES_SECTION_CONSTRUCTION                               :{GOLD}Construction
 STR_FINANCES_SECTION_NEW_VEHICLES                               :{GOLD}New Vehicles
 STR_FINANCES_SECTION_TRAIN_RUNNING_COSTS                        :{GOLD}Trains
@@ -3985,6 +4153,9 @@ STR_FINANCES_SECTION_AIRCRAFT_REVENUE                           :{GOLD}Aircraft
 STR_FINANCES_SECTION_SHIP_REVENUE                               :{GOLD}Ships
 STR_FINANCES_SECTION_LOAN_INTEREST                              :{GOLD}Loan Interest
 STR_FINANCES_SECTION_OTHER                                      :{GOLD}Other
+STR_FINANCES_SECTION_STOCK_REVENUE                              :{GOLD}Stock Revenue
+STR_FINANCES_SECTION_STOCK_PURCHASE                             :{GOLD}Stock Purchases
+STR_FINANCES_SECTION_DIVIDENDS                                  :{GOLD}Dividends
 
 STR_FINANCES_TOTAL_CAPTION                                      :{WHITE}Total
 STR_FINANCES_NEGATIVE_INCOME                                    :-{CURRENCY_LONG}
@@ -4038,6 +4209,8 @@ STR_COMPANY_VIEW_GIVE_MONEY_BUTTON                              :{BLACK}Give mon
 STR_COMPANY_VIEW_GIVE_MONEY_TOOLTIP                             :{BLACK}Give money to this company
 STR_COMPANY_VIEW_HOSTILE_TAKEOVER_BUTTON                        :{BLACK}Hostile takeover
 STR_COMPANY_VIEW_HOSTILE_TAKEOVER_TOOLTIP                       :{BLACK}Do a hostile takeover of this company
+STR_COMPANY_VIEW_STOCKS_BUTTON                                  :{BLACK}Stocks
+STR_COMPANY_VIEW_STOCKS_TOOLTIP                                 :{BLACK}Open the stock management window
 
 STR_COMPANY_VIEW_NEW_FACE_BUTTON                                :{BLACK}New Face
 STR_COMPANY_VIEW_NEW_FACE_TOOLTIP                               :{BLACK}Select new face for manager

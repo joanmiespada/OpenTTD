@@ -474,6 +474,10 @@ add_files(
     story_cmd.h
     story_gui.cpp
     story_type.h
+    stock_cmd.cpp
+    stock_cmd.h
+    stock_gui.cpp
+    stock_type.h
     string.cpp
     string_base.h
     string_func.h

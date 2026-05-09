@@ -60,6 +60,7 @@
 /** Company GUI constants. */
 static void DoSelectCompanyManagerFace(Window *parent);
 static void ShowCompanyInfrastructure(CompanyID company);
+void ShowStockMarketWindow();
 
 /** List of revenues. */
 static const std::initializer_list<ExpensesType> _expenses_list_revenue = {
@@ -84,6 +85,13 @@ static const std::initializer_list<ExpensesType> _expenses_list_capital_costs = 
 	EXPENSES_CONSTRUCTION,
 	EXPENSES_NEW_VEHICLES,
 	EXPENSES_OTHER,
+};
+
+/** List of stock market income/expenses. */
+static const std::initializer_list<ExpensesType> _expenses_list_stock = {
+	EXPENSES_STOCK_REVENUE,
+	EXPENSES_STOCK_PURCHASE,
+	EXPENSES_DIVIDENDS,
 };
 
 /** Expense list container. */
@@ -120,6 +128,7 @@ static const std::initializer_list<ExpensesList> _expenses_list_types = {
 	{ STR_FINANCES_REVENUE_TITLE,            _expenses_list_revenue },
 	{ STR_FINANCES_OPERATING_EXPENSES_TITLE, _expenses_list_operating_costs },
 	{ STR_FINANCES_CAPITAL_EXPENSES_TITLE,   _expenses_list_capital_costs },
+	{ STR_FINANCES_STOCK_TITLE,              _expenses_list_stock },
 };
 
 /**
@@ -1907,6 +1916,9 @@ static constexpr std::initializer_list<NWidgetPart> _nested_company_widgets = {
 						NWidget(NWID_SELECTION, INVALID_COLOUR, WID_C_SELECT_GIVE_MONEY),
 							NWidget(WWT_PUSHTXTBTN, COLOUR_GREY, WID_C_GIVE_MONEY), SetStringTip(STR_COMPANY_VIEW_GIVE_MONEY_BUTTON, STR_COMPANY_VIEW_GIVE_MONEY_TOOLTIP),
 						EndContainer(),
+						NWidget(NWID_SELECTION, INVALID_COLOUR, WID_C_SELECT_STOCKS),
+							NWidget(WWT_PUSHTXTBTN, COLOUR_GREY, WID_C_STOCKS), SetStringTip(STR_COMPANY_VIEW_STOCKS_BUTTON, STR_COMPANY_VIEW_STOCKS_TOOLTIP),
+						EndContainer(),
 						NWidget(NWID_SELECTION, INVALID_COLOUR, WID_C_SELECT_MULTIPLAYER),
 							NWidget(WWT_PUSHTXTBTN, COLOUR_GREY, WID_C_COMPANY_JOIN), SetStringTip(STR_COMPANY_VIEW_JOIN, STR_COMPANY_VIEW_JOIN_TOOLTIP),
 						EndContainer(),
@@ -1981,6 +1993,8 @@ struct CompanyWindow : Window
 			reinit |= this->GetWidget<NWidgetStacked>(WID_C_SELECT_GIVE_MONEY)->SetDisplayedPlane((local || _local_company == COMPANY_SPECTATOR || !_settings_game.economy.give_money) ? SZSP_NONE : 0);
 			/* Enable/disable 'Hostile Takeover' button. */
 			reinit |= this->GetWidget<NWidgetStacked>(WID_C_SELECT_HOSTILE_TAKEOVER)->SetDisplayedPlane((local || _local_company == COMPANY_SPECTATOR || !c->is_ai || _networking) ? SZSP_NONE : 0);
+			/* Enable/disable 'Stocks' button - only show on own company window. */
+			reinit |= this->GetWidget<NWidgetStacked>(WID_C_SELECT_STOCKS)->SetDisplayedPlane((local && _settings_game.economy.stock_market) ? 0 : SZSP_NONE);
 
 			/* Multiplayer buttons. */
 			reinit |= this->GetWidget<NWidgetStacked>(WID_C_SELECT_MULTIPLAYER)->SetDisplayedPlane((!_networking || !NetworkCanJoinCompany(c->index) || _local_company == c->index) ? (int)SZSP_NONE : 0);
@@ -2043,6 +2057,7 @@ struct CompanyWindow : Window
 			case WID_C_VIEW_INFRASTRUCTURE:
 			case WID_C_GIVE_MONEY:
 			case WID_C_HOSTILE_TAKEOVER:
+			case WID_C_STOCKS:
 			case WID_C_COMPANY_JOIN:
 				size.width = GetStringBoundingBox(STR_COMPANY_VIEW_VIEW_HQ_BUTTON).width;
 				size.width = std::max(size.width, GetStringBoundingBox(STR_COMPANY_VIEW_BUILD_HQ_BUTTON).width);
@@ -2050,6 +2065,7 @@ struct CompanyWindow : Window
 				size.width = std::max(size.width, GetStringBoundingBox(STR_COMPANY_VIEW_INFRASTRUCTURE_BUTTON).width);
 				size.width = std::max(size.width, GetStringBoundingBox(STR_COMPANY_VIEW_GIVE_MONEY_BUTTON).width);
 				size.width = std::max(size.width, GetStringBoundingBox(STR_COMPANY_VIEW_HOSTILE_TAKEOVER_BUTTON).width);
+				size.width = std::max(size.width, GetStringBoundingBox(STR_COMPANY_VIEW_STOCKS_BUTTON).width);
 				size.width = std::max(size.width, GetStringBoundingBox(STR_COMPANY_VIEW_JOIN).width);
 				size.width += padding.width;
 				break;
@@ -2237,6 +2253,10 @@ struct CompanyWindow : Window
 
 			case WID_C_HOSTILE_TAKEOVER:
 				ShowBuyCompanyDialog(this->window_number, true);
+				break;
+
+			case WID_C_STOCKS:
+				ShowStockMarketWindow();
 				break;
 
 			case WID_C_COMPANY_JOIN: {
